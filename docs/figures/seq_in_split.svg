@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="671" viewBox="0 0 860 671">
+<defs>
+<marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#3e4c59"/></marker>
+<marker id="arrow_start" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M 10 0 L 0 5 L 10 10 z" fill="#3e4c59"/></marker>
+</defs>
+<rect x="0" y="0" width="860" height="671" fill="#ffffff"/>
+<rect x="35" y="16" width="150" height="32" rx="4" fill="#e4e7eb" stroke="#3e4c59" stroke-width="1.2"/>
+<text x="110" y="37" font-family="Arial, Helvetica, sans-serif" font-size="12" text-anchor="middle" font-weight="bold" fill="#1f2933">USB host</text>
+<rect x="35" y="625" width="150" height="32" rx="4" fill="#e4e7eb" stroke="#3e4c59" stroke-width="1.2"/>
+<text x="110" y="646" font-family="Arial, Helvetica, sans-serif" font-size="12" text-anchor="middle" font-weight="bold" fill="#1f2933">USB host</text>
+<path d="M 110 48 L 110 625" fill="none" stroke="#9aa5b1" stroke-width="1" stroke-dasharray="4 4"/>
+<rect x="355" y="16" width="150" height="32" rx="4" fill="#c9d6e8" stroke="#3e4c59" stroke-width="1.2"/>
+<text x="430" y="37" font-family="Arial, Helvetica, sans-serif" font-size="12" text-anchor="middle" font-weight="bold" fill="#1f2933">usb_top</text>
+<rect x="355" y="625" width="150" height="32" rx="4" fill="#c9d6e8" stroke="#3e4c59" stroke-width="1.2"/>
+<text x="430" y="646" font-family="Arial, Helvetica, sans-serif" font-size="12" text-anchor="middle" font-weight="bold" fill="#1f2933">usb_top</text>
+<path d="M 430 48 L 430 625" fill="none" stroke="#9aa5b1" stroke-width="1" stroke-dasharray="4 4"/>
+<rect x="675" y="16" width="150" height="32" rx="4" fill="#cfe6da" stroke="#3e4c59" stroke-width="1.2"/>
+<text x="750" y="37" font-family="Arial, Helvetica, sans-serif" font-size="12" text-anchor="middle" font-weight="bold" fill="#1f2933">Software (CPU)</text>
+<rect x="675" y="625" width="150" height="32" rx="4" fill="#cfe6da" stroke="#3e4c59" stroke-width="1.2"/>
+<text x="750" y="646" font-family="Arial, Helvetica, sans-serif" font-size="12" text-anchor="middle" font-weight="bold" fill="#1f2933">Software (CPU)</text>
+<path d="M 750 48 L 750 625" fill="none" stroke="#9aa5b1" stroke-width="1" stroke-dasharray="4 4"/>
+<rect x="656.84" y="74" width="186.32000000000002" height="40" rx="2" fill="#fff6d5" stroke="#c9b26b" stroke-width="1.2"/>
+<text x="750" y="90.7" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2933">size = 192 B buffer, split:</text>
+<text x="750" y="105.7" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2933">64-byte packets</text>
+<path d="M 750 140 L 433 140" fill="none" stroke="#3e4c59" stroke-width="1.3" marker-end="url(#arrow)"/>
+<text x="590.0" y="134" font-family="Consolas, 'DejaVu Sans Mono', monospace" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2933">write 192 bytes into the buffer</text>
+<path d="M 750 170 L 433 170" fill="none" stroke="#3e4c59" stroke-width="1.3" marker-end="url(#arrow)"/>
+<text x="590.0" y="164" font-family="Consolas, 'DejaVu Sans Mono', monospace" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2933">transfer = arm | length 192</text>
+<path d="M 110 200 L 427 200" fill="none" stroke="#3e4c59" stroke-width="1.3" marker-end="url(#arrow)"/>
+<text x="270.0" y="194" font-family="Consolas, 'DejaVu Sans Mono', monospace" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2933">IN token</text>
+<path d="M 430 230 L 113 230" fill="none" stroke="#3e4c59" stroke-width="1.3" stroke-dasharray="5 3" marker-end="url(#arrow)"/>
+<text x="270.0" y="224" font-family="Consolas, 'DejaVu Sans Mono', monospace" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2933">DATA0, bytes 0-63</text>
+<path d="M 110 260 L 427 260" fill="none" stroke="#3e4c59" stroke-width="1.3" marker-end="url(#arrow)"/>
+<text x="270.0" y="254" font-family="Consolas, 'DejaVu Sans Mono', monospace" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2933">ACK</text>
+<path d="M 110 290 L 427 290" fill="none" stroke="#3e4c59" stroke-width="1.3" marker-end="url(#arrow)"/>
+<text x="270.0" y="284" font-family="Consolas, 'DejaVu Sans Mono', monospace" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2933">IN token</text>
+<path d="M 430 320 L 113 320" fill="none" stroke="#3e4c59" stroke-width="1.3" stroke-dasharray="5 3" marker-end="url(#arrow)"/>
+<text x="270.0" y="314" font-family="Consolas, 'DejaVu Sans Mono', monospace" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2933">DATA1, bytes 64-127</text>
+<path d="M 110 350 L 286.0 350" fill="none" stroke="#3e4c59" stroke-width="1.3"/>
+<path d="M 280.0 344 L 292.0 356" fill="none" stroke="#e07a5f" stroke-width="2"/>
+<path d="M 280.0 356 L 292.0 344" fill="none" stroke="#e07a5f" stroke-width="2"/>
+<text x="270.0" y="344" font-family="Consolas, 'DejaVu Sans Mono', monospace" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2933">ACK</text>
+<path d="M 110 380 L 427 380" fill="none" stroke="#3e4c59" stroke-width="1.3" marker-end="url(#arrow)"/>
+<text x="270.0" y="374" font-family="Consolas, 'DejaVu Sans Mono', monospace" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2933">IN token</text>
+<path d="M 430 410 L 113 410" fill="none" stroke="#3e4c59" stroke-width="1.3" stroke-dasharray="5 3" marker-end="url(#arrow)"/>
+<text x="270.0" y="404" font-family="Consolas, 'DejaVu Sans Mono', monospace" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2933">DATA1, bytes 64-127 (resent)</text>
+<path d="M 110 440 L 427 440" fill="none" stroke="#3e4c59" stroke-width="1.3" marker-end="url(#arrow)"/>
+<text x="270.0" y="434" font-family="Consolas, 'DejaVu Sans Mono', monospace" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2933">ACK</text>
+<path d="M 110 470 L 427 470" fill="none" stroke="#3e4c59" stroke-width="1.3" marker-end="url(#arrow)"/>
+<text x="270.0" y="464" font-family="Consolas, 'DejaVu Sans Mono', monospace" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2933">IN token</text>
+<path d="M 430 500 L 113 500" fill="none" stroke="#3e4c59" stroke-width="1.3" stroke-dasharray="5 3" marker-end="url(#arrow)"/>
+<text x="270.0" y="494" font-family="Consolas, 'DejaVu Sans Mono', monospace" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2933">DATA0, bytes 128-191</text>
+<path d="M 110 530 L 427 530" fill="none" stroke="#3e4c59" stroke-width="1.3" marker-end="url(#arrow)"/>
+<text x="270.0" y="524" font-family="Consolas, 'DejaVu Sans Mono', monospace" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2933">ACK</text>
+<rect x="333.76" y="542" width="192.48000000000002" height="25" rx="2" fill="#fff6d5" stroke="#c9b26b" stroke-width="1.2"/>
+<text x="430" y="558.7" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2933">last packet ACKed: armed = 0</text>
+<path d="M 430 593 L 747 593" fill="none" stroke="#3e4c59" stroke-width="1.3" marker-end="url(#arrow)"/>
+<text x="590.0" y="587" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2933">irq: transfer_complete (one per arm)</text>
+</svg>

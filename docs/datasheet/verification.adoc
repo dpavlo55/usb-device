@@ -1,0 +1,105 @@
+:sectnums:
+== Verification
+
+`docs/verification-plan.md` lists every test and what it checks. This chapter summarizes the approach, the
+levels and the coverage.
+
+
+// ####################################################################################################################
+:sectnums:
+=== Approach
+
+* **Black-box, spec-driven checks.** Tests drive and observe ports only. Expected behavior comes from Python
+  reference models (`tb/cocotb/models/`) or from the USB 2.0 specification, never from the RTL itself.
+* **Seeded randomness.** Random tests draw a fresh 32-bit seed per run and log it; `SEED=<n>` replays a run
+  exactly.
+* **Self-checked testbenches.** Scoreboards and checkers have their own pure-Python tests, including
+  negative cases that must fail, so a broken checker cannot pass silently.
+* **No assertions in the RTL.** All contracts are checked by the testbenches.
+* **Every bug fix gets a regression test.**
+
+Simulator: https://github.com/nickg/nvc[NVC] (VHDL-2008) with cocotb. The compliance environment uses pyuvm
+and pyvsc.
+
+
+// ####################################################################################################################
+:sectnums:
+=== Verification Levels
+
+[cols="<3,<4,<7"]
+[options="header",grid="rows"]
+|=======================
+| Level | Where | What it proves
+| Checker self-tests     | `tb/cocotb/tests/`, `tb/uvm/unit/` (pytest, no simulator) | models, codecs and scoreboards are correct and catch the errors they exist for
+| Block                  | VHDL harnesses in `tb/vhdl/`, one runner flag each | one RTL block against its model, including corner cases and backpressure
+| Top level              | `usb_top_tb`, cocotb host on the USB pins | the PHY and packet path end to end through the real pins
+| Firmware in the loop   | NEORV32 + `usb_top`, firmware in `sw/tests/` with a cocotb host | the register interface, interrupts and the C stack against real bus traffic
+| Compliance             | pyuvm testbench in `tb/uvm/` | USB-IF USBCV Chapter 9 device tests, with random device profiles and functional coverage
+| Hardware               | Arty A7-100, `tools/usb_bench.py` | enumeration and data integrity on real hosts, and throughput
+|=======================
+
+
+// ####################################################################################################################
+:sectnums:
+=== Running the Tests
+
+[source,sh]
+----
+python -m pytest tb/cocotb/tests tb/uvm/unit -p no:cacheprovider   # checker self-tests
+python tools/crc_cocotb_runner.py                 # CRC block
+python tools/elastic_fifo_runner.py               # elastic FIFO
+python tools/input_output_buffer_runner.py        # AXI4-Stream buffers
+python tools/cocotb_runner.py --<block>-only      # one block harness; --help lists them
+python tools/cocotb_runner.py                     # top-level suites
+python tools/cocotb_runner.py --sw-test <name>    # one firmware test or application
+python tb/uvm/run.py                              # all USBCV Chapter 9 tests
+python tb/uvm/run.py --dut reference --selfcheck  # prove the UVM checkers catch bugs
+----
+
+A full regression runs all of these, every block harness and every firmware test, in about 20 to 30
+minutes on a desktop PC.
+
+
+// ####################################################################################################################
+:sectnums:
+=== Feature Coverage
+
+[cols="<4,<8"]
+[options="header",grid="rows"]
+|=======================
+| Feature | Covered by
+| NRZI, bit stuffing, SYNC, EOP           | PHY RX/TX, serializer and deserializer tests; codec self-tests
+| CRC5 / CRC16                            | `test_crc`, packet suites, generator tests
+| Bus reset detection                     | `test_reset_detected`, `test_usb_phy_rx_packets_random`, `bus_reset`
+| Turnaround timing                       | `test_usb_turnaround`, UVM protocol checker
+| Address and endpoint routing            | `test_routing`, `test_foreign_packets`, `packet_routing`, TD 9.16
+| Data toggles                            | `test_out`, `test_in`, `out_handshake`, `in_handshake`, UVM protocol checker
+| ACK / NAK / STALL                       | protocol tests, handshake firmware tests, TD 9.9
+| SETUP handling                          | `test_setup_response`, `test_setup`, setup-stage tests, `setup`
+| Buffer ownership and sizes              | endpoint tests, `buffer_size`, `ram_size`
+| Shared RAM size parameter               | `ram_size`, `usb_ll_ram` and `cdc_echo` at sizes from 1 to 64 KiB; `test_generated_registers`
+| Double buffering                        | `test_double_buffer_*`, `double_buffer`, `hal_double`
+| Split IN transfers                      | `test_in_split`, `test_double_buffer_in_split`, `in_split`, `hal_double`
+| Isochronous                             | `test_in_resend` (completion without ACK)
+| Suspend, resume, remote wakeup          | `test_usb_bus_state`, `suspend`, TD 9.12, TD 9.14
+| VBUS detection and pull-up gating       | `vbus`, `cdc_echo` (unplug and replug re-enumerates)
+| Interrupts                              | `usb_interrupt`, every HAL and application test (interrupt-driven)
+| Clock-domain crossings                  | `test_cdc`, `test_device_address_crossing`, `test_control_crossing`
+| Chapter 9 behavior                      | UVM TD tests, `cdc_echo`
+| Throughput                              | `test_sw_cdc_bench_stream`, `tools/usb_bench.py` on hardware
+|=======================
+
+
+// ####################################################################################################################
+:sectnums:
+=== Not Verified
+
+* **Electrical behavior:** signal quality, eye diagram, rise and fall times. These depend on the board and
+  the FPGA I/O, not on the RTL.
+* **Clock tolerance:** the receiver is not tested against host clock drift or bit jitter; all simulated
+  traffic has ideal timing.
+* **Formal proofs:** there are no formal proofs (FIFO bounds, CDC safety).
+* **Gate-level and post-route simulation.**
+* **Low speed and high speed:** out of scope for this full-speed core.
+* **USB-IF certification:** the Chapter 9 tests are a re-implementation of the USBCV procedures, not the
+  official tool.

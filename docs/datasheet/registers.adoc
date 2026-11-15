@@ -1,0 +1,168 @@
+:sectnums:
+== Register Map
+
+The source of truth for the register map is `rdl/usb_device.rdl`, which also holds the full description of
+every field. This chapter follows it. `make -C rdl html` generates a browsable reference from the same
+source, and `make -C rdl cheader` generates the C header `sw/include/usb_device_regs.h`.
+
+All registers are 32 bits wide, little-endian and in the `clk_sys` domain. Offsets are relative to the
+core's base address. Unused bits read as `0` and ignore writes.
+
+.Access types
+[cols="^1,<8"]
+[options="header",grid="rows"]
+|=======================
+| Type | Meaning
+| r    | read-only; a write to a register with only read-only fields returns `SLVERR`
+| r/w  | read and write
+| w    | write-only pulse: writing `1` triggers an action for one cycle; reads as `0`
+| w1c  | set by hardware, cleared by writing `1`; a hardware set in the same cycle as a clear wins
+|=======================
+
+.Clearing `w1c` registers
+[WARNING]
+Clear `w1c` bits with a full-word write of only the bits to clear, e.g.
+`+ep->interrupt.w = USB_DEVICE__ENDPOINTX__INTERRUPT__TRANSFER_COMPLETE_bm+`. A read-modify-write of one bit
+writes back every pending `1` and clears them all.
+
+**C names.** The generated header describes the whole address space as one structure, `usb_device_t`, with
+a union per register (`.w` for the word, `.f` for bit-fields) and two macros per field:
+`+USB_DEVICE__<REGISTER>__<FIELD>_bm+` (bit mask) and `_bp` (bit position). Endpoint registers use the prefix
+`+USB_DEVICE__ENDPOINTX__+`.
+
+
+// ####################################################################################################################
+:sectnums:
+=== Register Summary
+
+[cols="<3,<4,<8"]
+[options="header",grid="rows"]
+|=======================
+| Offset                  | Register                        | Function
+| `0x000`                 | `core_id`                       | constant identification
+| `0x004`                 | `version`                       | core version
+| `0x008`                 | `control`                       | core enable, pull-up, remote wakeup
+| `0x00C`                 | `status`                        | RAM size, frame number, suspend, VBUS
+| `0x010`                 | `device_address`                | USB device address
+| `0x014`                 | `bus_event_enable`              | enables of `bus_event`
+| `0x018`                 | `bus_event`                     | bus-level events
+| `0x01C`                 | `interrupt_enable`              | enables of `interrupt` towards `irq`
+| `0x020`                 | `interrupt`                     | interrupt summary
+| `0x040 + 0x14·n`        | `endpoint[n].control`           | entry configuration
+| `0x044 + 0x14·n`        | `endpoint[n].transfer`          | arm, toggle reset, IN length
+| `0x048 + 0x14·n`        | `endpoint[n].status`            | ownership, next buffer, byte count
+| `0x04C + 0x14·n`        | `endpoint[n].interrupt_enable`  | enables of `endpoint[n].interrupt`
+| `0x050 + 0x14·n`        | `endpoint[n].interrupt`         | entry events
+| `0x1000`^1^             | `usb_ram`                       | shared buffer RAM, 2^`RAM_ADDR_WIDTH`^ bytes
+|=======================
+
+_n_ = 0 to 15. ^1^ `0x1000`, or 2^`RAM_ADDR_WIDTH`^ when that is larger.
+
+
+// ####################################################################################################################
+:sectnums:
+=== Global Registers
+
+.Global registers
+[cols="<2,<3,<5,^1,^2,<9"]
+[options="header",grid="all"]
+|=======================
+| Offset | Register | Bit(s), Field | R/W | Reset | Function
+| `0x000` | `core_id` | `31:0` `id` ^| r ^| `0x600DC0DE` | constant core ID, for probing
+.3+<| `0x004` .3+<| `version`
+  <| `23:16` `major` ^| r ^| `0x01` | major version
+  <| `15:8` `minor`  ^| r ^| `0x00` | minor version
+  <| `7:0` `patch`   ^| r ^| `0x00` | patch version
+.3+<| `0x008` .3+<| `control`
+  <| `2` `remote_wakeup` ^| w ^| `0` | write `1` to signal remote wakeup; ignored unless `status.suspended` is `1` (<<_suspend_resume_and_remote_wakeup>>)
+  <| `1` `enable_pu`     ^| r/w ^| `0` | request the D+ pull-up; driven only while VBUS is present
+  <| `0` `enable_core`   ^| r/w ^| `0` | enable the core; while `0` every entry is inactive, armed buffers stay armed
+.4+<| `0x00C` .4+<| `status`
+  <| `31:16` `ram_words`   ^| r ^| ^2^ | RAM size in 32-bit words: 2^`RAM_ADDR_WIDTH`-2^
+  <| `12:2` `frame_number` ^| r ^| `0` | frame number of the last good SOF
+  <| `1` `suspended`       ^| r ^| `0` | the bus is suspended
+  <| `0` `vbus_present`    ^| r ^| `0` | VBUS is present
+| `0x010` | `device_address` | `6:0` `address` ^| r/w ^| `0` | address the core answers to; cleared by hardware on bus reset; write after the `SET_ADDRESS` status stage
+.5+<| `0x014` .5+<| `bus_event_enable`
+  <| `4` `vbus_en`      ^| r/w ^| `0` | enable `bus_event.vbus`
+  <| `3` `sof_en`       ^| r/w ^| `0` | enable `bus_event.sof`
+  <| `2` `resume_en`    ^| r/w ^| `0` | enable `bus_event.resume`
+  <| `1` `suspend_en`   ^| r/w ^| `0` | enable `bus_event.suspend`
+  <| `0` `bus_reset_en` ^| r/w ^| `0` | enable `bus_event.bus_reset`
+.5+<| `0x018` .5+<| `bus_event`
+  <| `4` `vbus`      ^| w1c ^| `0` | VBUS appeared or went away; `status.vbus_present` has the new level
+  <| `3` `sof`       ^| w1c ^| `0` | a start-of-frame packet was received
+  <| `2` `resume`    ^| w1c ^| `0` | non-idle signaling ended a suspend (resume or bus reset)
+  <| `1` `suspend`   ^| w1c ^| `0` | the bus has been idle for 3 ms
+  <| `0` `bus_reset` ^| w1c ^| `0` | a bus reset was detected; `device_address` has been cleared
+.2+<| `0x01C` .2+<| `interrupt_enable`
+  <| `16` `bus_event_enable`        ^| r/w ^| `0` | let `interrupt.bus_event` drive `irq`
+  <| `15:0` `endpoint_15_enable` ... `endpoint_0_enable` ^| r/w ^| `0` | let `interrupt.endpoint_n` drive `irq`
+.2+<| `0x020` .2+<| `interrupt`
+  <| `16` `bus_event`                     ^| r ^| `0` | `bus_event` has an event that is pending and enabled in `bus_event_enable`
+  <| `15:0` `endpoint_15` ... `endpoint_0` ^| r ^| `0` | entry _n_ has an interrupt pending and enabled in `endpoint[n].interrupt_enable`
+|=======================
+
+^2^ Reset value 2^`RAM_ADDR_WIDTH`-2^: `0x0400` (1024 words, 4 KiB) for the default `RAM_ADDR_WIDTH = 12`.
+
+**`interrupt`** shows pending causes whatever `interrupt_enable` holds; `interrupt_enable` only selects which
+of them drive `irq`. Its bits are not sticky: clear the cause in `endpoint[n].interrupt` or `bus_event`.
+
+
+// ####################################################################################################################
+:sectnums:
+=== Endpoint Registers
+
+Each of the 16 entries has a group of five registers at `0x040 + 0x14·n`. <<_endpoint_entries>> describes
+how they work together. In C: `USB_DEVICE->endpoint[n]`.
+
+.Endpoint registers (offsets within the group)
+[cols="<2,<3,<5,^1,^2,<9"]
+[options="header",grid="all"]
+|=======================
+| Offset | Register | Bit(s), Field | R/W | Reset | Function
+.9+<| `+0x00` .9+<| `control`
+  <| `16+AW-1:16` `base_address`^3^ ^| r/w ^| `0` | byte address of the buffer in the shared RAM
+  <| `15:13` `split`         ^| r/w ^| `0` | IN: packet size 2^(size+3-split)^ for split transfers; `0`: one packet per transfer; must not exceed `size`
+  <| `12` `double_buffer`    ^| r/w ^| `0` | pair with entry _n_+1; ignored on entry 15 and for `CONTROL`
+  <| `11:8` `endpoint_number` ^| r/w ^| `0` | USB endpoint number served, 0 to 15
+  <| `7` `stall`             ^| r/w ^| `0` | answer tokens with STALL; cleared by hardware on a control entry when a SETUP arrives
+  <| `6:4` `size`            ^| r/w ^| `0` | buffer size 2^(size+3)^ bytes: `0` = 8 ... `7` = 1024
+  <| `3:2` `kind`            ^| r/w ^| `0` | `0` CONTROL, `1` BULK, `2` INTERRUPT, `3` ISOCHRONOUS
+  <| `1` `direction`         ^| r/w ^| `0` | `0` IN (device to host), `1` OUT (host to device)
+  <| `0` `enable`            ^| r/w ^| `0` | enable the entry (active while `control.enable_core` is `1` too)
+.3+<| `+0x04` .3+<| `transfer`
+  <| `31` `arm`           ^| w ^| `0` | hand the buffer to hardware; for IN write together with `length`
+  <| `30` `reset_toggle`  ^| w ^| `0` | return the data toggle to DATA0
+  <| `9:0` `length`       ^| r/w ^| `0` | IN: bytes to send, 0 to 1023; above the buffer size sends the whole buffer; captured on `arm`
+.3+<| `+0x08` .3+<| `status`
+  <| `31` `armed`        ^| r ^| `0` | `1`: hardware owns the buffer; `0`: software owns it
+  <| `30` `next_buffer`  ^| r ^| `0` | double buffering: `0` this entry, `1` entry _n_+1 serves the next transfer
+  <| `9:0` `byte_count`  ^| r ^| `0` | result of the last transfer: OUT bytes received, `0` for IN, `8` for SETUP
+.5+<| `+0x0C` .5+<| `interrupt_enable`
+  <| `4` `overrun_en`           ^| r/w ^| `0` | enable `interrupt.overrun`
+  <| `3` `zlp_en`               ^| r/w ^| `0` | enable `interrupt.zlp`
+  <| `2` `transfer_complete_en` ^| r/w ^| `0` | enable `interrupt.transfer_complete`
+  <| `1` `crc_error_en`         ^| r/w ^| `0` | enable `interrupt.crc_error`
+  <| `0` `setup_en`             ^| r/w ^| `0` | enable `interrupt.setup`
+.5+<| `+0x10` .5+<| `interrupt`
+  <| `4` `overrun`           ^| w1c ^| `0` | an OUT packet arrived while not armed; it was NAKed and dropped
+  <| `3` `zlp`               ^| w1c ^| `0` | the completed OUT transfer was a zero-length packet (set with `transfer_complete`)
+  <| `2` `transfer_complete` ^| w1c ^| `0` | the transfer completed; the buffer is back with software
+  <| `1` `crc_error`         ^| w1c ^| `0` | reserved: _not implemented yet_, never set
+  <| `0` `setup`             ^| w1c ^| `0` | a SETUP packet was received; its 8 bytes are at the start of the buffer
+|=======================
+
+^3^ `AW` = `RAM_ADDR_WIDTH`: bits `27:16` for the default 4 KiB RAM.
+
+
+// ####################################################################################################################
+:sectnums:
+=== Shared RAM
+
+[cols="<2,<3,<11"]
+[options="header",grid="rows"]
+|=======================
+| Offset    | Name      | Function
+| `0x1000`^1^ | `usb_ram` | 2^`RAM_ADDR_WIDTH`^ bytes of endpoint buffers, read and written as 32-bit little-endian words (byte strobes honoured). In C: `USB_DEVICE->usb_ram.mem[]`.
+|=======================

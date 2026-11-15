@@ -1,0 +1,41 @@
+venv/
+
+# Python tooling and test results
+__pycache__/
+*.py[cod]
+.pytest_cache/
+coverage.xml
+htmlcov/
+
+# HDL simulator products
+sim/*
+!sim/README.md
+**/work/
+sim/build/
+sim_build/
+*.cf
+*.vcd
+*.fst
+*.ghw
+results.xml
+
+# Waveform files
+*.surf.ron
+
+# Generated register documentation and report (rtl/usb_device_regs*.vhd are kept
+# so the IP builds without PeakRDL; regenerate them with make -C rdl)
+html/
+rtl/usb_device_regs_hwif.rpt
+
+# Project firmware build products
+/sw/build/
+/sw/include/usb_device_regs.h
+/sw/main.elf
+/sw/main.asm
+/sw/elf.bin
+/sw/neorv32_*.*
+
+*.jou
+
+# Data sheet and Doxygen build output (make -C docs)
+/docs/public/

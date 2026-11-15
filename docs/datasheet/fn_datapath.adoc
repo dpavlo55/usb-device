@@ -1,0 +1,123 @@
+// ####################################################################################################################
+:sectnums:
+=== Block Diagram
+
+.Block diagram of usb_top
+image::block_diagram.svg[Block diagram of usb_top,width=100%,align=center]
+
+The receive path turns line states into bytes and bytes into packet records. `usb_protocol` decides how
+to answer each transaction; `usb_rx_filter` and `usb_setup_stage` route OUT and SETUP payload into the
+right buffer; `usb_endpoints` keeps the per-entry ownership state and reads IN payload from the RAM.
+The transmit path turns handshakes and DATA packets back into line states. Software sees only the
+register block and the RAM, both in the `clk_sys` domain.
+
+
+// ####################################################################################################################
+:sectnums:
+=== Physical Layer (PHY)
+
+[cols="<3,<4,<4"]
+[grid="none"]
+|=======================
+| Hardware source files: | `usb_phy_rx.vhd`        | line receiver: oversampling, line states
+|                        | `usb_phy_tx.vhd`        | line transmitter: bit stuffing, NRZI, EOP
+|                        | `cdc_sync_single.vhd`   | input synchronizers
+| Top entity ports:      | `usb_dp`, `usb_dn`      | USB data lines
+| Clock domain:          | `clk_usb`               |
+|=======================
+
+**Receiver.** D+ and D- pass through two-stage synchronizers into the `clk_usb` domain. The full-speed bit
+time is 4 `clk_usb` cycles. Each transition on D+ restarts a sample counter, and the receiver samples both
+lines one cycle after the counter restarts, close to the middle of the bit, so the sampling phase follows
+the host's clock. Each sample becomes a line state: J (D+ high), K (D- high), SE0 (both low) or SE1. While
+the core transmits, the receiver reports J so that the device does not hear its own packets.
+
+**Transmitter.** The transmitter takes bits from the serializer, inserts a stuffed zero after six
+consecutive ones, encodes NRZI and holds each bit for 4 `clk_usb` cycles. It ends each packet with
+an end-of-packet (two bit times of SE0 followed by one bit time of J) and then releases the lines. A packet
+queued during the EOP waits for it to finish. The core drives D+ and D- only while it transmits, and for
+remote-wakeup resume signaling (<<_suspend_resume_and_remote_wakeup>>).
+
+
+// ####################################################################################################################
+:sectnums:
+=== Packet Layer
+
+[cols="<3,<4,<4"]
+[grid="none"]
+|=======================
+| Hardware source files: | `usb_packet_deserializer.vhd` | bits to bytes: SYNC, NRZI decode, unstuffing, EOP, bus reset
+|                        | `usb_packet_parser.vhd`       | packet records: PID check, CRC5, CRC16
+|                        | `usb_packet_generator.vhd`    | handshake and DATA packets, CRC16
+|                        | `usb_packet_serializer.vhd`   | bytes to bits
+|                        | `crc.vhd`                     | CRC5 and CRC16
+| Clock domain:          | `clk_usb`                     |
+|=======================
+
+**Receive.** The deserializer waits for the SYNC pattern, decodes NRZI, removes stuffed bits and assembles
+bytes until EOP. Seven consecutive ones (a bit-stuffing violation) or a broken SYNC abort the packet.
+SE0 lasting at least 2.5 µs (120 `clk_usb` cycles) is reported as a bus reset.
+
+The parser checks the PID against its complement, the CRC5 of tokens and the CRC16 of DATA packets, and
+produces one record per packet: type, PID, address, endpoint, frame number, payload length and the check
+results. Payload bytes travel separately as an AXI4-Stream.
+
+**Packets with errors are ignored.** A token with a bad PID or CRC5 gets no answer. A DATA packet with a
+bad CRC16, a bit-stuffing error or more bytes than the buffer holds gets no handshake, so the host retries
+it (USB 2.0 sections 8.5.2 and 8.6.4); nothing is reported to software.
+
+**Transmit.** The generator builds handshake packets (ACK, NAK, STALL) and DATA0/DATA1 packets. For an IN
+answer it sends SYNC and PID while the RAM read of the payload is still running, so the turnaround does
+not depend on the RAM latency. It appends the CRC16 and hands bytes to the serializer.
+
+
+// ####################################################################################################################
+:sectnums:
+=== Protocol Engine
+
+[cols="<3,<4,<4"]
+[grid="none"]
+|=======================
+| Hardware source files: | `usb_protocol.vhd`   | transactions: routing, handshakes, data toggles, double buffering
+| Registers:             | `control.enable_core`, `device_address` |
+|                        | `endpoint[n].control`, `endpoint[n].transfer.reset_toggle` |
+| Clock domain:          | `clk_usb`            |
+|=======================
+
+`usb_protocol` handles one transaction at a time (USB is half duplex). It matches each token to an
+endpoint entry and decides the answer.
+
+**Address and entry matching.** A token is answered only when its address equals `device_address` and the
+core is enabled (`control.enable_core`). Its endpoint number and direction select the enabled entry with
+the same `endpoint_number` and `direction`; a SETUP token selects the control OUT entry. A token for which
+no entry is enabled gets no answer. The second entry of a double-buffered pair is never matched directly
+(<<_double_buffering>>).
+
+.Answer to a token for an enabled entry
+[cols="<3,<4,<4"]
+[options="header",grid="rows"]
+|=======================
+| Entry state            | OUT token + DATA packet                       | IN token
+| `stall = 1`            | STALL, data dropped                           | STALL
+| armed                  | ACK, data written, transfer completes         | DATA0/DATA1 with the buffer contents
+| not armed              | NAK, data dropped, `overrun` raised           | NAK
+3+^| **Isochronous entries** (no handshakes, no data toggle)
+| armed, not stalled     | data written, transfer completes              | DATA0 with the buffer contents; completes without ACK
+| not armed              | data dropped, `overrun` raised                | no answer
+| `stall = 1`            | data dropped                                  | no answer
+|=======================
+
+SETUP transactions are always ACKed when the DATA packet is valid; see <<_control_endpoints_and_setup>>.
+
+**Data toggles.** Hardware keeps the data toggle of each entry. IN packets alternate DATA0 and DATA1; an IN
+transfer completes only when the host ACKs it, and without an ACK the same data is sent again with the
+same PID. OUT data is accepted only with the expected PID: a repeated packet with the old PID (the host
+missed the ACK) is ACKed and dropped. `transfer.reset_toggle` returns the toggle to DATA0, as needed after
+`SET_CONFIGURATION`, `SET_INTERFACE` and `CLEAR_FEATURE(ENDPOINT_HALT)`. A SETUP sets the next PID of both
+control entries to DATA1. A bus reset returns every toggle to DATA0.
+
+**Turnaround.** The device answers within the bus turnaround time of USB 2.0 section 7.1.18.1; the
+testbench checks every answer between 2 and 6.5 bit times after the end of the host packet.
+
+**IN while busy.** If an IN token arrives while the previous IN payload read is still running (not
+possible with specification bus timing), the token is NAKed instead of answered with incomplete data.

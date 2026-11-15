@@ -1,0 +1,77 @@
+// ####################################################################################################################
+:sectnums:
+=== Shared Buffer RAM
+
+[cols="<3,<4,<4"]
+[grid="none"]
+|=======================
+| Hardware source files: | `usb_ram.vhd`             | four byte-wide banks
+|                        | `dual_port_ram.vhd`       | true dual-port RAM, one port per clock domain
+|                        | `usb_ram_sw_adapter.vhd`  | CPU port: 32-bit words with byte strobes
+|                        | `usb_ram_usb_adapter.vhd` | USB port: bytes
+| Registers:             | `status.ram_words`, `usb_ram` |
+|=======================
+
+All endpoint buffers live in one RAM of 2^`RAM_ADDR_WIDTH`^ bytes (1 KiB to 64 KiB, see <<_configuration>>).
+The RAM is built from four byte-wide true dual-port banks, so the CPU port reads and writes 32-bit words
+with byte strobes while the USB port reads and writes single bytes. It maps to block RAM on FPGAs.
+
+.Address window and shared RAM as the HAL allocates it for cdc_bench
+image::address_space.svg[Address window and shared RAM as the HAL allocates it for cdc_bench,width=90%,align=center]
+
+Software reads the RAM size from `status.ram_words`, in 32-bit words (the size in bytes is
+`4 * ram_words`), and places the buffers within it. The CPU accesses buffers directly through the
+`usb_ram` window: there is no FIFO and no DMA, so software may read OUT data in place and build IN data in
+place (zero copy).
+
+.Sizing the RAM
+[TIP]
+Add up the buffers of every entry that can be open at the same time: EP0 needs two buffers of
+`wMaxPacketSize0`, a double-buffered endpoint needs two, and a split IN endpoint needs a buffer as large as
+the transfer it should move per arm. The CDC-ACM benchmark application (double-buffered bulk endpoints,
+512-byte split IN transfers) fits in the default 4 KiB.
+
+
+// ####################################################################################################################
+:sectnums:
+=== Clock-Domain Crossing
+
+[cols="<3,<4,<4"]
+[grid="none"]
+|=======================
+| Hardware source files: | `usb_cdc.vhd`          | all control and status crossings
+|                        | `cdc_handshake.vhd`    | multi-bit data with a request/acknowledge handshake
+|                        | `cdc_pulse.vhd`        | single-cycle events
+|                        | `cdc_sync_single.vhd`  | level synchronizer (two flip-flops)
+|=======================
+
+The registers are in the `clk_sys` domain and the USB logic is in the `clk_usb` domain. `usb_cdc` carries
+everything between them:
+
+[cols="<4,<3,<5"]
+[options="header",grid="rows"]
+|=======================
+| Signal                                           | Direction        | Mechanism
+| `enable_core`, `enable_pu`, endpoint `enable` and `stall` | sys -> usb | level synchronizer
+| `device_address`                                 | sys -> usb       | handshake
+| `transfer.arm`, `transfer.reset_toggle`, `remote_wakeup` | sys -> usb | pulse
+| `transfer.length`                                | sys -> usb       | none: written with `arm`, stable while armed
+| transfer events (entry, byte count, completion, SETUP, ZLP, overrun) | usb -> sys | handshake
+| `suspended`                                      | usb -> sys       | level synchronizer
+| bus reset, resume, SOF                           | usb -> sys       | pulse
+| frame number                                     | usb -> sys       | captured on the SOF pulse, stable for 1 ms
+| VBUS                                             | pin -> sys       | level synchronizer
+| D+, D-                                           | pin -> usb       | level synchronizer
+| endpoint `base_address`, `size`, `kind`, `direction`, `split`, `double_buffer` | sys -> usb | none: quasi-static
+| buffer data                                      | both             | the dual-port RAM
+|=======================
+
+**Quasi-static configuration.** The endpoint configuration fields other than `enable` and `stall` are
+not synchronized; they may change only while the entry is disabled (<<_endpoint_entries>>).
+
+**Event spacing.** The controller holds one event at a time during the handshake to `clk_sys`. A handshake
+round trip takes about 8 to 10 `clk_usb` cycles, while two transactions on the bus are at least about 256
+`clk_usb` cycles apart, so no event is lost at specification bus timing. Only a system clock far slower
+than the bus, or a stopped one, could break this.
+
+**Resets.** The toggle-based crossings assume both domains are reset together (<<_clocks_and_resets>>).

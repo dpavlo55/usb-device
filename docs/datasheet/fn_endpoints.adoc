@@ -1,0 +1,239 @@
+// ####################################################################################################################
+:sectnums:
+=== Endpoint Entries
+
+[cols="<3,<4,<4"]
+[grid="none"]
+|=======================
+| Hardware source files: | `usb_endpoints.vhd`            | wiring of the endpoint subsystem
+|                        | `usb_endpoints_controller.vhd` | arm/complete state, events, split IN
+|                        | `usb_rx_filter.vhd`            | OUT/SETUP payload routing, buffer size limit
+|                        | `usb_ram_usb_adapter.vhd`      | USB port of the shared RAM
+| Registers:             | `endpoint[0..15].*`            | one register group per entry
+| Interrupts:            | `endpoint[n].interrupt`        | `setup`, `transfer_complete`, `zlp`, `overrun`
+|=======================
+
+The core has 16 **entries**. An entry is one direction of one USB endpoint, with its own buffer in the
+shared RAM. A bidirectional endpoint (such as the control endpoint EP0) uses two entries, one OUT and one
+IN. The entry index _n_ is independent of the USB endpoint number: `endpoint[n].control.endpoint_number`
+and `direction` say which endpoint the entry serves.
+
+.Entry configuration (`endpoint[n].control`)
+[cols="<3,<8"]
+[options="header",grid="rows"]
+|=======================
+| Field             | Meaning
+| `enable`          | the entry answers tokens; active only while `control.enable_core` is also `1`
+| `direction`       | `IN` (device to host) or `OUT` (host to device)
+| `kind`            | `CONTROL`, `BULK`, `INTERRUPT` or `ISOCHRONOUS`
+| `size`            | buffer size, 2^(size+3)^ bytes: 8 to 1024
+| `stall`           | answer every token with STALL
+| `endpoint_number` | USB endpoint number, 0 to 15
+| `double_buffer`   | pair with entry _n_+1 (<<_double_buffering>>)
+| `split`           | IN only: send a transfer as packets of 2^(size+3-split)^ bytes (<<_split_in_transfers>>)
+| `base_address`    | byte address of the buffer in the shared RAM
+|=======================
+
+.Configuration is quasi-static
+[IMPORTANT]
+Change `base_address`, `size`, `kind`, `direction`, `double_buffer` and `split` only while `enable` is `0`.
+They may be written in the same write that sets `enable`. Changing them while the entry is enabled can
+corrupt a transfer in progress. These fields cross into the `clk_usb` domain without synchronization;
+only `enable` and `stall` are synchronized.
+
+**Buffer bounds.** The buffer holds stem:[2^{\,\text{size}+3}] bytes, and hardware never accesses bytes outside `[base_address, base_address + 2^(size+3)^)`. An
+OUT DATA packet with more bytes than the buffer holds is treated as a corrupted packet: no handshake, no
+bytes past the buffer written, no event, toggle unchanged (the host retries). An IN packet sends at most
+the buffer size. Set `size` to at least the endpoint's `wMaxPacketSize`. Software must place buffers so
+that they do not overlap and fit in the RAM; the hardware does not check this.
+
+==== Buffer Ownership
+
+Every buffer belongs either to software or to hardware. `status.armed` tells which:
+
+.Buffer ownership
+image::buffer_ownership.svg[Buffer ownership,width=85%,align=center]
+
+. Software writes `transfer.arm` (for IN, together with `transfer.length` in the same write). `status.armed`
+  becomes `1`.
+. Hardware completes one transfer:
+  ** **OUT:** one DATA packet with a good CRC and the expected toggle is written into the buffer.
+  ** **IN:** `length` bytes are sent and the host ACKs the last packet (isochronous: the packet has been
+     sent).
+. Hardware hands the buffer back: `status.armed` returns to `0`, `status.byte_count` is updated and
+  `interrupt.transfer_complete` is set, all in the same cycle. An OUT zero-length packet also sets
+  `interrupt.zlp`.
+
+While `status.armed` is `0`, hardware never writes the buffer, with one exception: a SETUP on a control
+entry (<<_control_endpoints_and_setup>>). An OUT packet arriving for an unarmed entry is NAKed and raises
+`interrupt.overrun`; the buffer, `armed` and `byte_count` stay unchanged, so data not yet read is safe.
+
+.Rules for software
+[TIP]
+Do not arm a buffer that is already armed. Do not change `transfer.length` while `status.armed` is `1`:
+hardware captures it on `arm`. Arming is accepted whether or not the entry is enabled; a disabled entry
+keeps its buffer armed and uses it once enabled.
+
+**Result.** After completion, `status.byte_count` holds:
+
+* **OUT:** the number of bytes received, 0 to 1023. Read that many bytes from `base_address`.
+* **IN:** `0`.
+* **SETUP** (control OUT entry): `8`.
+
+**IN length.** `transfer.length` is the number of bytes to send, 0 to 1023; `0` sends a zero-length packet.
+A length above the buffer size sends the whole buffer.
+
+**OUT and IN step by step.** <<_out_transfer_host_to_device>> and <<_in_transfer_device_to_host>> show both directions as sequence diagrams.
+
+**Lost ACK.** An armed IN buffer stays armed until the host ACKs it. If the ACK is lost, the host sends
+the IN token again and hardware resends the same data with the same PID.
+
+
+// ####################################################################################################################
+:sectnums:
+=== Control Endpoints and SETUP
+
+[cols="<3,<4,<4"]
+[grid="none"]
+|=======================
+| Hardware source files: | `usb_setup_stage.vhd`   | holds SETUP data until the packet is accepted
+|                        | `usb_protocol.vhd`      | SETUP acceptance, unstall, toggle
+| Registers:             | `endpoint[n].control.kind = CONTROL` |
+| Interrupts:            | `endpoint[n].interrupt.setup` |
+|=======================
+
+A control endpoint uses two entries with `kind = CONTROL` and the same `endpoint_number`: one OUT, one IN.
+The OUT entry also receives SETUP packets.
+
+**SETUP is always accepted.** A SETUP whose DATA packet is DATA0, exactly 8 bytes long and has a good CRC
+is ACKed, even when the OUT entry is not armed or is stalled (USB 2.0 section 8.5.3). Only then does
+hardware:
+
+. write the 8 bytes to the start of the OUT entry's buffer, overwriting what it held,
+. clear `stall` and `status.armed` on both entries with that `endpoint_number`,
+. set the next DATA PID of both entries to DATA1,
+. set `status.byte_count = 8` and raise `interrupt.setup` on the OUT entry.
+
+`usb_setup_stage` holds the SETUP bytes while the packet arrives and writes them to the RAM only after the
+packet has passed every check, so a corrupted SETUP never touches the buffer. SETUP data that is not ACKed
+writes nothing, and a SETUP never writes more than 8 bytes. The `setup` interrupt is raised only after the
+bytes are in the RAM.
+
+A SETUP cancels any control transfer in progress: an armed data or status stage is disarmed by the
+hardware, so software starts the new request from a clean state.
+
+.Read the SETUP bytes first
+[IMPORTANT]
+The data stage of a control write reuses the OUT entry's buffer. Software must read the 8 SETUP bytes
+before it arms the OUT entry for the data stage.
+
+.Control read (GET_DESCRIPTOR) on EP0
+image::seq_control_read.svg[Control read (GET_DESCRIPTOR) on EP0,width=80%,align=center]
+
+**Request errors.** For a request it does not support, software sets `stall` on both control entries. The
+next SETUP clears it automatically, as USB 2.0 section 8.5.3.4 requires for a control endpoint.
+
+**Device address.** `SET_ADDRESS` takes effect only after its status stage. Software writes
+`device_address` after `transfer_complete` of the control IN entry that sent the zero-length status packet.
+Hardware clears `device_address` on a bus reset.
+
+
+// ####################################################################################################################
+:sectnums:
+=== Double Buffering
+
+[cols="<3,<4,<4"]
+[grid="none"]
+|=======================
+| Hardware source files: | `usb_protocol.vhd`  | buffer selection and alternation
+| Registers:             | `endpoint[n].control.double_buffer`, `endpoint[n].status.next_buffer` |
+|=======================
+
+With one buffer, the host's next packet is NAKed while software empties (OUT) or refills (IN) the buffer,
+and the host retries later. Double buffering removes that gap: setting `control.double_buffer` on entry _n_
+(_n_ < 15, `kind` not `CONTROL`) makes entry _n_+1 the second buffer of the same endpoint.
+
+**Setup.** Configure entry _n_+1 like entry _n_: same `endpoint_number`, `kind` and `direction`, enabled,
+with its own `base_address` and `size`.
+
+**Operation.** Hardware never matches a token to entry _n_+1 directly. It serves each token of entry _n_
+from the buffer that `status.next_buffer` of entry _n_ selects (`0`: entry _n_, `1`: entry _n_+1):
+
+* **That buffer is armed:** the transaction runs on it. When the transfer completes, the entry that owns the
+  buffer reports it in its own `status` and `interrupt`, and `next_buffer` flips.
+* **That buffer is not armed:** NAK (no answer for isochronous); an OUT packet raises `overrun` on that
+  entry. Hardware never skips to the other buffer, so packets always alternate strictly between the two
+  entries.
+
+.Buffers of a CDC-ACM device without and with double buffering
+image::double_buffer.svg[Buffers of a CDC-ACM device without and with double buffering,width=100%,align=center]
+
+.Double-buffered OUT endpoint
+image::seq_double_buffer_out.svg[Double-buffered OUT endpoint,width=80%,align=center]
+
+**Shared state.** Entry _n_'s `stall` and data toggle serve both entries; entry _n_+1's `stall` and
+`transfer.reset_toggle` are ignored. `next_buffer` is cleared by a bus reset and while `enable` or
+`double_buffer` is `0`; `reset_toggle` does not change it.
+
+.Arm alternately
+[TIP]
+Arm the two entries alternately, starting with entry _n_, and handle completions in the order
+`next_buffer` predicts. The HAL does this for you (`usb_hal_ep_open_double()`, `usb_hal_ep_arm_raw()`).
+
+
+// ####################################################################################################################
+:sectnums:
+=== Split IN Transfers
+
+[cols="<3,<4,<4"]
+[grid="none"]
+|=======================
+| Hardware source files: | `usb_endpoints_controller.vhd` | per-packet offsets and the last-packet decision
+| Registers:             | `endpoint[n].control.split` |
+|=======================
+
+Without splitting, one arm sends one packet. For a large IN transfer that means one interrupt and one
+register round trip per packet. `control.split = s` on an IN entry sends a transfer as packets of _packet_ bytes, with
+
+[stem]
+++++
+\text{packet} = 2^{\,\text{size} + 3 - s}
+++++
+
+so a single `transfer.arm` moves up to the whole buffer with one completion event.
+
+* Each IN token while armed sends the next `min(remaining, packet)` bytes. A packet that the host does not
+  ACK is sent again.
+* The packet that is shorter than _packet_, or that sends the last of `transfer.length` bytes, completes the
+  transfer.
+* A transfer that is a multiple of _packet_ ends **without** a zero-length packet. If the class protocol
+  needs one, arm one with `length = 0`.
+* `split = 0` sends each transfer as one packet. `split` must not exceed `size`; it is ignored for OUT.
+
+.Example
+[NOTE]
+A bulk IN endpoint with `wMaxPacketSize = 64` and a 512-byte buffer: `size = 6` (512 bytes), `split = 3`
+gives 64-byte packets. One arm with `length = 512` sends eight packets and raises one `transfer_complete`.
+
+.Split IN transfer: one arm, three packets, one lost ACK
+image::seq_in_split.svg[Split IN transfer: one arm, three packets, one lost ACK,width=80%,align=center]
+
+**OUT is not split.** A stream of full OUT packets would never complete without the host sending a short
+packet, so every OUT packet completes its own transfer. Use double buffering to keep OUT throughput up.
+
+Split and double buffering combine: each of the two buffers of a pair then carries a split transfer.
+
+
+// ####################################################################################################################
+:sectnums:
+=== Isochronous Endpoints
+
+An entry with `kind = ISOCHRONOUS` sends and expects no handshakes and has no data toggle:
+
+* **IN:** an armed, unstalled entry answers the token with DATA0 and completes when the packet has been
+  sent, without waiting for an ACK. An unarmed entry does not answer.
+* **OUT:** an armed entry takes the DATA packet regardless of its PID and completes. An unarmed entry drops
+  it and raises `overrun`.
+
+Software paces isochronous traffic with the start-of-frame event (<<_start_of_frame>>). Isochronous support
+is verified only for completion without ACK; it has not been tested with a real isochronous class.

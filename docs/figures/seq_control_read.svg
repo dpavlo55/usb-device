@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="593" viewBox="0 0 860 593">
+<defs>
+<marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#3e4c59"/></marker>
+<marker id="arrow_start" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M 10 0 L 0 5 L 10 10 z" fill="#3e4c59"/></marker>
+</defs>
+<rect x="0" y="0" width="860" height="593" fill="#ffffff"/>
+<rect x="35" y="16" width="150" height="32" rx="4" fill="#e4e7eb" stroke="#3e4c59" stroke-width="1.2"/>
+<text x="110" y="37" font-family="Arial, Helvetica, sans-serif" font-size="12" text-anchor="middle" font-weight="bold" fill="#1f2933">USB host</text>
+<rect x="35" y="547" width="150" height="32" rx="4" fill="#e4e7eb" stroke="#3e4c59" stroke-width="1.2"/>
+<text x="110" y="568" font-family="Arial, Helvetica, sans-serif" font-size="12" text-anchor="middle" font-weight="bold" fill="#1f2933">USB host</text>
+<path d="M 110 48 L 110 547" fill="none" stroke="#9aa5b1" stroke-width="1" stroke-dasharray="4 4"/>
+<rect x="355" y="16" width="150" height="32" rx="4" fill="#c9d6e8" stroke="#3e4c59" stroke-width="1.2"/>
+<text x="430" y="37" font-family="Arial, Helvetica, sans-serif" font-size="12" text-anchor="middle" font-weight="bold" fill="#1f2933">usb_top</text>
+<rect x="355" y="547" width="150" height="32" rx="4" fill="#c9d6e8" stroke="#3e4c59" stroke-width="1.2"/>
+<text x="430" y="568" font-family="Arial, Helvetica, sans-serif" font-size="12" text-anchor="middle" font-weight="bold" fill="#1f2933">usb_top</text>
+<path d="M 430 48 L 430 547" fill="none" stroke="#9aa5b1" stroke-width="1" stroke-dasharray="4 4"/>
+<rect x="675" y="16" width="150" height="32" rx="4" fill="#cfe6da" stroke="#3e4c59" stroke-width="1.2"/>
+<text x="750" y="37" font-family="Arial, Helvetica, sans-serif" font-size="12" text-anchor="middle" font-weight="bold" fill="#1f2933">Software (CPU)</text>
+<rect x="675" y="547" width="150" height="32" rx="4" fill="#cfe6da" stroke="#3e4c59" stroke-width="1.2"/>
+<text x="750" y="568" font-family="Arial, Helvetica, sans-serif" font-size="12" text-anchor="middle" font-weight="bold" fill="#1f2933">Software (CPU)</text>
+<path d="M 750 48 L 750 547" fill="none" stroke="#9aa5b1" stroke-width="1" stroke-dasharray="4 4"/>
+<path d="M 110 92 L 427 92" fill="none" stroke="#3e4c59" stroke-width="1.3" marker-end="url(#arrow)"/>
+<text x="270.0" y="86" font-family="Consolas, 'DejaVu Sans Mono', monospace" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2933">SETUP token, DATA0 (8 bytes)</text>
+<path d="M 430 122 L 113 122" fill="none" stroke="#3e4c59" stroke-width="1.3" stroke-dasharray="5 3" marker-end="url(#arrow)"/>
+<text x="270.0" y="116" font-family="Consolas, 'DejaVu Sans Mono', monospace" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2933">ACK</text>
+<rect x="324.52" y="134" width="210.96" height="55" rx="2" fill="#fff6d5" stroke="#c9b26b" stroke-width="1.2"/>
+<text x="430" y="150.7" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2933">write 8 bytes to EP0 OUT buffer</text>
+<text x="430" y="165.7" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2933">clear stall and armed on EP0</text>
+<text x="430" y="180.7" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2933">next PID DATA1</text>
+<path d="M 430 215 L 747 215" fill="none" stroke="#3e4c59" stroke-width="1.3" marker-end="url(#arrow)"/>
+<text x="590.0" y="209" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2933">irq: setup (EP0 OUT)</text>
+<path d="M 750 245 L 433 245" fill="none" stroke="#3e4c59" stroke-width="1.3" marker-end="url(#arrow)"/>
+<text x="590.0" y="239" font-family="Consolas, 'DejaVu Sans Mono', monospace" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2933">read SETUP: GET_DESCRIPTOR, wLength 18</text>
+<path d="M 750 275 L 433 275" fill="none" stroke="#3e4c59" stroke-width="1.3" marker-end="url(#arrow)"/>
+<text x="590.0" y="269" font-family="Consolas, 'DejaVu Sans Mono', monospace" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2933">EP0 IN: write 18 bytes, arm | length 18</text>
+<path d="M 750 305 L 433 305" fill="none" stroke="#3e4c59" stroke-width="1.3" marker-end="url(#arrow)"/>
+<text x="590.0" y="299" font-family="Consolas, 'DejaVu Sans Mono', monospace" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2933">EP0 OUT: arm (status stage, early)</text>
+<path d="M 110 335 L 427 335" fill="none" stroke="#3e4c59" stroke-width="1.3" marker-end="url(#arrow)"/>
+<text x="270.0" y="329" font-family="Consolas, 'DejaVu Sans Mono', monospace" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2933">IN token</text>
+<path d="M 430 365 L 113 365" fill="none" stroke="#3e4c59" stroke-width="1.3" stroke-dasharray="5 3" marker-end="url(#arrow)"/>
+<text x="270.0" y="359" font-family="Consolas, 'DejaVu Sans Mono', monospace" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2933">DATA1, 18 bytes</text>
+<path d="M 110 395 L 427 395" fill="none" stroke="#3e4c59" stroke-width="1.3" marker-end="url(#arrow)"/>
+<text x="270.0" y="389" font-family="Consolas, 'DejaVu Sans Mono', monospace" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2933">ACK</text>
+<path d="M 430 425 L 747 425" fill="none" stroke="#3e4c59" stroke-width="1.3" marker-end="url(#arrow)"/>
+<text x="590.0" y="419" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2933">irq: transfer_complete (EP0 IN)</text>
+<path d="M 110 455 L 427 455" fill="none" stroke="#3e4c59" stroke-width="1.3" marker-end="url(#arrow)"/>
+<text x="270.0" y="449" font-family="Consolas, 'DejaVu Sans Mono', monospace" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2933">OUT token, DATA1 (0 bytes)</text>
+<path d="M 430 485 L 113 485" fill="none" stroke="#3e4c59" stroke-width="1.3" stroke-dasharray="5 3" marker-end="url(#arrow)"/>
+<text x="270.0" y="479" font-family="Consolas, 'DejaVu Sans Mono', monospace" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2933">ACK</text>
+<path d="M 430 515 L 747 515" fill="none" stroke="#3e4c59" stroke-width="1.3" marker-end="url(#arrow)"/>
+<text x="590.0" y="509" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2933">irq: transfer_complete + zlp (EP0 OUT)</text>
+</svg>

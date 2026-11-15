@@ -1,0 +1,14 @@
+= USB 2.0 Full-Speed Device Controller - Data Sheet
+include::../attrs.adoc[]
+:title: [Data Sheet] USB 2.0 Full-Speed Device Controller
+:toc: left
+:imagesdir: img
+:favicon: img/favicon.svg
+
+image::logo_wide.svg[usb-device,width=420,align=center]
+
+[.text-center]
+link:{dox-index}[Software reference (Doxygen)] |
+link:pdf/usb_device_datasheet.pdf[Data sheet (PDF)]
+
+include::content.adoc[]

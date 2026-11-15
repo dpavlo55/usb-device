@@ -1,0 +1,107 @@
+name: Verification
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: verification-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  XPACK_RISCV_VERSION: "15.2.0-1"
+
+jobs:
+  checkers:
+    name: Checker self-tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python -m pytest tb/cocotb/tests tb/uvm/unit -p no:cacheprovider
+
+  blocks:
+    name: Block ${{ matrix.run }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        run:
+          - tools/crc_cocotb_runner.py
+          - tools/elastic_fifo_runner.py
+          - tools/input_output_buffer_runner.py
+          - tools/cocotb_runner.py --no-waves --generator-only
+          - tools/cocotb_runner.py --no-waves --phy-tx-only
+          - tools/cocotb_runner.py --no-waves --serializer-only
+          - tools/cocotb_runner.py --no-waves --deserializer-only
+          - tools/cocotb_runner.py --no-waves --parser-only
+          - tools/cocotb_runner.py --no-waves --ram-usb-adapter-only
+          - tools/cocotb_runner.py --no-waves --cdc-only
+          - tools/cocotb_runner.py --no-waves --endpoints-only
+          - tools/cocotb_runner.py --no-waves --protocol-only
+          - tools/cocotb_runner.py --no-waves --rx-filter-only
+          - tools/cocotb_runner.py --no-waves --setup-stage-only
+          - tools/cocotb_runner.py --no-waves --bus-state-only
+          - tools/cocotb_runner.py --no-waves --turnaround-only
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - uses: ./.github/actions/setup
+      - run: python ${{ matrix.run }}
+
+  top:
+    name: Top level
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - uses: ./.github/actions/setup
+        with:
+          riscv: "true"
+      - run: python tools/cocotb_runner.py --no-waves
+
+  firmware:
+    name: Firmware ${{ matrix.test }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        test: [buffer_size, bus_reset, double_buffer, endpoint_transfer, hal_double, in_handshake,
+               in_split, out_handshake, packet_routing, ram_size, setup, suspend, usb_hal,
+               usb_interrupt, usb_ll_ram, vbus, cdc_echo, cdc_bench]
+        filter: [""]
+        include:
+          - test: endpoint_ram_sw
+            filter: test_sw_firmware
+          - test: endpoint_ram_hw
+            filter: test_usb_data_packets
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - uses: ./.github/actions/setup
+        with:
+          riscv: "true"
+      - run: >-
+          python tools/cocotb_runner.py --no-waves --sw-test ${{ matrix.test }}
+          ${{ matrix.filter && format('--test-filter {0}', matrix.filter) || '' }}
+
+  uvm:
+    name: USBCV Chapter 9 (pyuvm)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - uses: ./.github/actions/setup
+      - run: python tb/uvm/run.py
+      - run: python tb/uvm/run.py --dut reference --selfcheck

@@ -1,0 +1,122 @@
+// ####################################################################################################################
+:sectnums:
+=== Bus Reset
+
+[cols="<3,<4,<4"]
+[grid="none"]
+|=======================
+| Hardware source files: | `usb_packet_deserializer.vhd` | SE0 duration detection
+| Registers:             | `bus_event.bus_reset`, `device_address` |
+|=======================
+
+SE0 on the bus for at least 2.5 µs (120 `clk_usb` cycles) is a bus reset (USB 2.0 section 7.1.7.5).
+Hardware then:
+
+* clears `device_address` to `0`,
+* returns every data toggle to DATA0 and every `next_buffer` to `0`,
+* aborts any transaction in progress,
+* raises `bus_event.bus_reset`.
+
+Software must return the device to the Default state: disable every entry except the control endpoint,
+clear all stalls and re-arm EP0 for the next SETUP. Endpoint configuration and armed buffers are otherwise
+left to software.
+
+.Detached lines
+[NOTE]
+With the pull-up off, the lines float and may read as SE0, which looks like a bus reset. The software
+stack ignores bus resets while it is detached.
+
+
+// ####################################################################################################################
+:sectnums:
+=== Suspend, Resume and Remote Wakeup
+
+[cols="<3,<4,<4"]
+[grid="none"]
+|=======================
+| Hardware source files: | `usb_bus_state.vhd` | idle timer, resume detection, remote-wakeup signaling
+| Registers:             | `status.suspended`, `control.remote_wakeup` |
+|                        | `bus_event.suspend`, `bus_event.resume` |
+|=======================
+
+**Suspend.** While the pull-up is driven, 3 ms of idle bus (J state) sets `status.suspended` and raises
+`bus_event.suspend` (USB 2.0 section 7.1.7.6). Any non-idle signaling ends the suspend: the host's resume
+(K), or a bus reset (which raises `bus_reset` as well). Hardware then clears `status.suspended` and raises
+`bus_event.resume`. Clearing `control.enable_pu` or losing VBUS also clears `status.suspended`.
+
+Device state, address and configuration are kept across a suspend. Reducing power while suspended (and
+meeting the suspend current limit of a bus-powered device) is up to the application.
+
+**Remote wakeup.** Writing `control.remote_wakeup = 1` while suspended asks the host to resume. The write is
+ignored unless `status.suspended` is `1`. Hardware then:
+
+. waits until the bus has been idle for at least 5 ms (T~WTRSM~, USB 2.0 section 7.1.7.7),
+. drives resume (K) on the bus for 2 ms,
+. releases the bus and ignores the line for a short guard time (10 µs) while it settles.
+
+The host answers with its own resume signaling, which ends the suspend and raises `bus_event.resume`.
+Software must signal remote wakeup only when the host has enabled it with
+`SET_FEATURE(DEVICE_REMOTE_WAKEUP)`.
+
+.Suspend and remote wakeup
+image::seq_remote_wakeup.svg[Suspend and remote wakeup,width=80%,align=center]
+
+.Bus-state timing (`clk_usb` = 48 MHz)
+[cols="<5,^2,^3"]
+[options="header",grid="rows"]
+|=======================
+| Parameter                                    | Time    | `clk_usb` cycles
+| bus reset: minimum SE0                       | 2.5 µs  | 120
+| suspend: idle bus                            | 3 ms    | 144 000
+| remote wakeup: idle bus before signaling     | 5 ms    | 240 000
+| remote wakeup: resume K driven               | 2 ms    | 96 000
+| remote wakeup: guard after releasing the bus | 10 µs   | 480
+|=======================
+
+
+// ####################################################################################################################
+:sectnums:
+=== Start of Frame
+
+[cols="<3,<4,<4"]
+[grid="none"]
+|=======================
+| Hardware source files: | `usb_bus_state.vhd` | frame number capture
+| Registers:             | `status.frame_number`, `bus_event.sof` |
+|=======================
+
+The host sends a start-of-frame (SOF) token every millisecond. For each SOF with a good PID and CRC5,
+hardware stores its 11-bit frame number in `status.frame_number` and raises `bus_event.sof`. The frame
+number is `0` after reset and holds while the bus is suspended.
+
+The SOF event arrives every millisecond; enable it (`bus_event_enable.sof_en`) only when software needs it,
+for instance to pace isochronous transfers or as a 1 ms time base.
+
+
+// ####################################################################################################################
+:sectnums:
+=== VBUS Detection and Pull-up
+
+[cols="<3,<4,<4"]
+[grid="none"]
+|=======================
+| Hardware source files: | `usb_top.vhd`        | VBUS synchronizer, pull-up gating
+| Top entity ports:      | `usb_vbus`, `usb_pu` |
+| Registers:             | `control.enable_pu`, `status.vbus_present`, `bus_event.vbus` |
+|=======================
+
+`usb_vbus` is synchronized into the `clk_sys` domain and shown in `status.vbus_present`. Every change of
+VBUS, plug or unplug, raises `bus_event.vbus`.
+
+The D+ pull-up output is
+
+[stem]
+++++
+\texttt{usb\_pu} = \texttt{control.enable\_pu} \land \text{VBUS present}
+++++
+
+so the device attaches only when software asks for it and a powered host port is present, and detaches
+immediately on unplug, without software (USB 2.0 section 7.1.5.1). Software requests the attach once with
+`control.enable_pu = 1`; on VBUS loss it returns its device state to Detached, and the pull-up comes back
+on the next plug by itself.
+

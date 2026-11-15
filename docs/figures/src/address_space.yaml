@@ -1,0 +1,48 @@
+# Address space of usb_top (RAM_ADDR_WIDTH = 12) and the shared RAM as the HAL allocates it
+# for sw/app/cdc_bench: EP0 in entries 0/1, then descriptor order; bulk endpoints double-buffered,
+# bulk IN with 512-byte split transfers. Offsets are relative to the core's base address.
+version: 1
+
+figure:
+  title: "usb_top address space and shared RAM (cdc_bench)"
+  footer: "offsets from the core's base address; RAM_ADDR_WIDTH = 12"
+
+memory:
+  regions:
+    - id: window
+      name: usb_top
+      start: 0x0000
+      size: 8K
+      children:
+        - { id: globals, name: "Global registers", size: 0x24, color: "#8fa9c9" }
+        - { id: res0, name: "Reserved", size: 0x1C, kind: reserved }
+        - { id: epregs, name: "endpoint[0..15]", size: 0x140, color: "#a3b9d4" }
+        - { id: res1, name: "Reserved", size: auto, kind: reserved }
+        - id: ram
+          name: "usb_ram"
+          start: 0x1000
+          size: 4K
+          color: "#81b29a"
+          children:
+            - { id: b0, name: "E0  EP0 OUT", size: 64, color: "#8fa9c9" }
+            - { id: b1, name: "E1  EP0 IN", size: 64, color: "#8fa9c9" }
+            - { id: b2, name: "E2  EP1 IN notify", size: 8, color: "#d8c38f" }
+            - { id: b3, name: "E3  EP2 OUT (1st)", size: 64, color: "#81b29a" }
+            - { id: b4, name: "E4  EP2 OUT (2nd)", size: 64, color: "#b5dcc4" }
+            - { id: b5, name: "E5  EP2 IN (1st)", size: 512, color: "#e07a5f" }
+            - { id: b6, name: "E6  EP2 IN (2nd)", size: 512, color: "#f2b19f" }
+            - { id: bfree, name: "Free", size: auto, kind: reserved }
+
+view:
+  defaults:
+    labels: { address: both, size: true }
+    scale: { mode: weighted, min_height: 26 }
+  columns:
+    - { id: c_win, root: window, title: "Address window", width: 150 }
+  expand:
+    - { region: ram, from: c_win, title: "usb_ram buffers" }
+
+style:
+  palette: color
+  connectors: dashed
+  reserved: { show_label: true }

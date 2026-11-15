@@ -1,0 +1,211 @@
+:sectnums:
+== Programming Model
+
+This chapter shows the register-level sequences software uses to run the core. The examples use the L1
+accessors of `usb_ll.h` (link:{dox-usb-ll}[Doxygen]), thin inline wrappers over the
+generated register header; `base` is the core's base address. The HAL (<<_software_framework>>)
+implements all of these sequences, so most applications never write them by hand.
+
+
+// ####################################################################################################################
+:sectnums:
+=== Initialization
+
+. **Probe.** Read `core_id` (`0x600DC0DE`) and `version` (`1.0.0`).
+. **Size the RAM.** Read `status.ram_words`; the RAM holds `4 * ram_words` bytes. Plan the buffers.
+. **Configure EP0.** Two entries with `kind = CONTROL`, `endpoint_number = 0`: one OUT, one IN, each with
+  a buffer of at least `wMaxPacketSize0` bytes.
+. **Enable interrupts.** On EP0 OUT: `setup`, `transfer_complete`; on EP0 IN: `transfer_complete`. In
+  `bus_event_enable`: `bus_reset`, `suspend`, `resume`, `vbus`. In `interrupt_enable`: the EP0 entries and
+  `bus_event`.
+. **Enable the core and request the pull-up.** `control.enable_core = 1`, `control.enable_pu = 1`. The
+  pull-up is driven once VBUS is present.
+
+[source,c]
+----
+#include "usb_ll.h"
+
+enum { EP0_OUT = 0, EP0_IN = 1 };          /* entry indices: software's choice */
+
+usb_ll_ep_control(base, EP0_OUT, usb_ll_ep_control_word(0x000, 0, 0, 3 /* 64 B */, 0 /* CONTROL */, 1 /* OUT */, 1));
+usb_ll_ep_control(base, EP0_IN,  usb_ll_ep_control_word(0x040, 0, 0, 3 /* 64 B */, 0 /* CONTROL */, 0 /* IN */,  1));
+
+usb_ll_ep_irq_enable(base, EP0_OUT, USB_DEVICE__ENDPOINTX__INTERRUPT_ENABLE__SETUP_EN_bm |
+                                    USB_DEVICE__ENDPOINTX__INTERRUPT_ENABLE__TRANSFER_COMPLETE_EN_bm);
+usb_ll_ep_irq_enable(base, EP0_IN,  USB_DEVICE__ENDPOINTX__INTERRUPT_ENABLE__TRANSFER_COMPLETE_EN_bm);
+
+usb_ll_bus_event_enable(base, USB_DEVICE__BUS_EVENT_ENABLE__BUS_RESET_EN_bm |
+                              USB_DEVICE__BUS_EVENT_ENABLE__SUSPEND_EN_bm |
+                              USB_DEVICE__BUS_EVENT_ENABLE__RESUME_EN_bm |
+                              USB_DEVICE__BUS_EVENT_ENABLE__VBUS_EN_bm);
+usb_ll_irq_enable(base, USB_DEVICE__INTERRUPT_ENABLE__BUS_EVENT_ENABLE_bm | (1u << EP0_OUT) | (1u << EP0_IN));
+
+usb_ll_control(base, usb_ll_control_word(1 /* enable_core */, 1 /* enable_pu */));
+----
+
+EP0 OUT needs no arm to receive a SETUP: SETUP packets are always accepted.
+
+
+// ####################################################################################################################
+:sectnums:
+=== Interrupt Handling
+
+`irq` is a level. The handler reads the summary, serves each pending entry and the bus events, and clears
+exactly the causes it read. It returns once `irq` has dropped.
+
+[source,c]
+----
+void usb_isr(void)
+{
+    uint32_t pending;
+    while ((pending = usb_ll_irq_pending(base)) != 0u) {     /* interrupt register */
+        if (pending & USB_DEVICE__INTERRUPT__BUS_EVENT_bm) {
+            const uint32_t events = usb_ll_bus_event_take(base);  /* read, then write the same bits back */
+            /* bus_reset, suspend, resume, sof, vbus ... */
+        }
+        for (uint32_t n = 0; n < 16; n++) {
+            if (pending & (1u << n)) {
+                const uint32_t causes = usb_ll_ep_irq_take(base, n);
+                const uint32_t status = usb_ll_ep_status(base, n);
+                /* transfer_complete (+ zlp), overrun, then setup ... */
+            }
+        }
+    }
+}
+----
+
+.Order of a SETUP and a completion
+[TIP]
+When EP0 OUT reports both `setup` and `transfer_complete` at once, handle the completion first and the
+SETUP last: the SETUP cancels the control transfer the completion belonged to. A `transfer_complete` still
+pending on EP0 IN belongs to the cancelled transfer too; clear and discard it. The handler loops until
+`interrupt` reads zero, so events that arrive while it runs are served before it returns.
+
+
+// ####################################################################################################################
+:sectnums:
+=== OUT Transfer (Host to Device)
+
+. Arm the OUT entry: `transfer.arm = 1` (`length` is ignored).
+. Wait for `interrupt.transfer_complete`.
+. Read `status.byte_count` bytes from the buffer at `base_address`. `interrupt.zlp` is set as well for a
+  zero-length packet.
+. Re-arm to receive the next packet.
+
+.OUT transfers: a received packet, then a NAK while the buffer is not armed
+image::seq_out_transfer.svg[OUT transfers: a received packet, then a NAK while the buffer is not armed,width=80%,align=center]
+
+[source,c]
+----
+usb_ll_ep_arm(base, EP1_OUT, 0);
+/* ... interrupt: transfer_complete on EP1_OUT ... */
+const uint32_t n = usb_ll_ep_byte_count(usb_ll_ep_status(base, EP1_OUT));
+usb_ram_read(rx, (const volatile uint32_t *)(usb_ll_ram(base) + EP1_OUT_BUFFER), n);
+usb_ll_ep_arm(base, EP1_OUT, 0);
+----
+
+A packet that arrives before the re-arm is NAKed (the host retries) and raises `overrun` if enabled. A
+transfer longer than one packet ends with a short packet; software collects the packets until then.
+
+
+// ####################################################################################################################
+:sectnums:
+=== IN Transfer (Device to Host)
+
+. Write the data into the buffer at `base_address`.
+. Arm with the length in the **same** write: `transfer = arm | length`.
+. Wait for `interrupt.transfer_complete`: the host has ACKed the data. The buffer is free again.
+
+[source,c]
+----
+usb_ram_write((volatile uint32_t *)(usb_ll_ram(base) + EP1_IN_BUFFER), tx, n);
+usb_ll_ep_arm(base, EP1_IN, n);
+/* ... interrupt: transfer_complete on EP1_IN ... */
+----
+
+<<_split_in_transfers>> shows an IN transfer on the bus, packet by packet.
+
+**Multi-packet transfers.** Without `split`, send a transfer longer than `wMaxPacketSize` as several arms of
+one packet each. With `split` (<<_split_in_transfers>>), one arm sends up to the whole buffer.
+
+**Zero-length packet.** If a transfer ends on a full packet and the class needs to mark its end, arm once
+more with `length = 0`.
+
+
+// ####################################################################################################################
+:sectnums:
+=== Control Transfers
+
+A control transfer has a SETUP stage, an optional data stage and a status stage in the opposite direction
+of the data.
+
+.Control transfer sequences
+[cols="<3,<6,<6"]
+[options="header",grid="rows"]
+|=======================
+| Stage | Control read (device to host, e.g. `GET_DESCRIPTOR`) | Control write / no data (e.g. `SET_ADDRESS`)
+| SETUP | `setup` on EP0 OUT: read the 8 bytes at the start of its buffer | same
+| Data  | arm EP0 IN with up to `wMaxPacketSize0` bytes per packet until `wLength` bytes or a short packet are sent | write: arm EP0 OUT per packet until `wLength` bytes arrive; no data: skip
+| Status| arm EP0 OUT (zero-length packet expected) | arm EP0 IN with `length = 0`
+|=======================
+
+.Arm the status OUT early
+[TIP]
+For a control read, arm the status OUT together with the data stage. A host may end the read early and go
+straight to the status stage; Windows does this on its first device-descriptor read.
+
+<<_control_endpoints_and_setup>> shows a control read as a sequence diagram.
+
+**Request errors.** Set `stall` on both EP0 entries. The next SETUP clears it.
+
+**SET_ADDRESS.** Send the zero-length status IN first. Write `device_address` only after its
+`transfer_complete`: the status stage still runs at address 0.
+
+
+// ####################################################################################################################
+:sectnums:
+=== Bus Events
+
+.Bus event handling
+[cols="<2,<9"]
+[options="header",grid="rows"]
+|=======================
+| Event       | Software action
+| `bus_reset` | Hardware has cleared `device_address`. Disable every entry except EP0, clear all stalls, return to the Default state. Ignore it while detached (floating lines read as SE0).
+| `suspend`   | Enter suspend: keep state, address and configuration; reduce power if needed.
+| `resume`    | Leave suspend.
+| `vbus`      | Read `status.vbus_present`. On loss: close the configuration and return to the Detached state with address 0. The pull-up follows VBUS in hardware; `control.enable_pu` may stay `1`.
+| `sof`       | Read `status.frame_number`; enable only when needed (1 kHz).
+|=======================
+
+**Remote wakeup.** While `status.suspended` is `1` and the host has enabled remote wakeup, write
+`control.remote_wakeup = 1`. Keep `enable_core` and `enable_pu` in the same write. `bus_event.resume`
+follows when the host resumes the bus.
+
+
+// ####################################################################################################################
+:sectnums:
+=== Endpoint Halt and Data Toggle
+
+[cols="<4,<7"]
+[options="header",grid="rows"]
+|=======================
+| Request                               | Software action
+| `SET_FEATURE(ENDPOINT_HALT)`          | set `endpoint[n].control.stall`
+| `CLEAR_FEATURE(ENDPOINT_HALT)`        | clear `stall`, write `transfer.reset_toggle = 1`
+| `SET_CONFIGURATION`, `SET_INTERFACE`  | configure and enable the entries, write `transfer.reset_toggle = 1` on each
+| `GET_STATUS(endpoint)`                | report `stall`
+|=======================
+
+`stall` and the toggle of a double-buffered pair live in the first entry of the pair.
+
+
+// ####################################################################################################################
+:sectnums:
+=== Double-Buffered Endpoint
+
+. Configure entries _n_ and _n_+1 identically (endpoint number, kind, direction), each with its own
+  buffer; set `double_buffer` on entry _n_ and enable both.
+. Arm entry _n_, then entry _n_+1 (for OUT both at once; for IN as data becomes available).
+. On each `transfer_complete`, handle the entry that reported it and re-arm that same entry. Completions
+  alternate _n_, _n_+1, _n_, ...; `status.next_buffer` of entry _n_ tells which comes next.

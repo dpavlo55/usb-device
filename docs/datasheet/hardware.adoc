@@ -1,0 +1,226 @@
+:sectnums:
+== Hardware Integration
+
+This chapter describes the core as a black box: its ports, clocks and resets, its address space, its
+interrupt and the circuit between the FPGA and the USB connector. <<_functional_description>> describes
+what happens inside.
+
+
+// ####################################################################################################################
+:sectnums:
+=== Top Entity
+
+The top entity is `usb_top` (`rtl/usb_top.vhd`). It has no generics; the only design parameter,
+`RAM_ADDR_WIDTH`, comes from the generated register package (see <<_configuration>>).
+
+.Top entity signals
+[cols="<4,^2,^1,<10"]
+[options="header",grid="rows"]
+|=======================
+| Signal         | Width | Dir | Function
+4+^| **Clocks and resets**
+| `clk_sys`      | 1     | in  | system clock: registers, AXI4-Lite port, CPU side of the RAM
+| `rst_sys_n`    | 1     | in  | asynchronous reset of the `clk_sys` domain, low-active
+| `clk_usb`      | 1     | in  | USB clock, 48 MHz: PHY, packet layer, transactions, USB side of the RAM
+| `rst_usb_n`    | 1     | in  | asynchronous reset of the `clk_usb` domain, low-active
+4+^| **AXI4-Lite slave port** (`clk_sys` domain)
+| `axil_awaddr`  | _AW_  | in  | write address
+| `axil_awprot`  | 3     | in  | write protection type (ignored)
+| `axil_awvalid` | 1     | in  | write address valid
+| `axil_awready` | 1     | out | write address ready
+| `axil_wdata`   | 32    | in  | write data
+| `axil_wstrb`   | 4     | in  | write byte strobes
+| `axil_wvalid`  | 1     | in  | write data valid
+| `axil_wready`  | 1     | out | write data ready
+| `axil_bresp`   | 2     | out | write response: `OKAY`, or `SLVERR` for an unmapped address or a read-only target
+| `axil_bvalid`  | 1     | out | write response valid
+| `axil_bready`  | 1     | in  | write response ready
+| `axil_araddr`  | _AW_  | in  | read address
+| `axil_arprot`  | 3     | in  | read protection type (ignored)
+| `axil_arvalid` | 1     | in  | read address valid
+| `axil_arready` | 1     | out | read address ready
+| `axil_rdata`   | 32    | out | read data
+| `axil_rresp`   | 2     | out | read response: `OKAY`, or `SLVERR` for an unmapped address or a write-only target
+| `axil_rvalid`  | 1     | out | read data valid
+| `axil_rready`  | 1     | in  | read data ready
+4+^| **USB**
+| `usb_dp`       | 1     | i/o | USB D+, to the FPGA pin
+| `usb_dn`       | 1     | i/o | USB D-, to the FPGA pin
+| `usb_pu`       | 1     | out | D+ pull-up enable, high-active: `control.enable_pu` AND VBUS present
+| `usb_vbus`     | 1     | in  | VBUS present, high-active; asynchronous, synchronized inside the core
+4+^| **Interrupt** (`clk_sys` domain)
+| `irq`          | 1     | out | interrupt request, high-active level (see <<_interrupt>>)
+|=======================
+
+_AW_ is the width of the AXI4-Lite address, `USB_DEVICE_REGS_MIN_ADDR_WIDTH` in the generated package
+`usb_device_regs_pkg`. It covers the whole address window of the core, registers and RAM, so it grows with the
+RAM: 13 bits (an 8 KiB window) for every RAM size up to 4 KiB, and `RAM_ADDR_WIDTH + 1` bits for larger RAMs,
+up to 17 bits for the largest, 64 KiB RAM (`RAM_ADDR_WIDTH = 16`). <<_configuration>> lists every case.
+
+.Bidirectional pins
+[NOTE]
+`usb_dp` and `usb_dn` are `inout` ports driven `'Z'` when the core does not transmit. Synthesis tools infer
+a tri-state I/O buffer on each pin; they need no vendor primitive. Keep them at the top level of the FPGA
+design, or pass the tri-state through every level of hierarchy above `usb_top`.
+
+
+// ####################################################################################################################
+:sectnums:
+=== Configuration
+
+The core has one design parameter: `RAM_ADDR_WIDTH`, the size of the shared buffer RAM in bytes as a power
+of two. Its only source is `rdl/usb_device.rdl`:
+
+[source,systemrdl]
+----
+addrmap usb_device #(
+    longint unsigned RAM_ADDR_WIDTH = 12
+) {
+----
+
+.RAM size parameter
+[cols="<3,^2,^2,^3,^3"]
+[options="header",grid="rows"]
+|=======================
+| `RAM_ADDR_WIDTH` | RAM size | RAM offset | Address window | AXI address width (_AW_)
+| 10               | 1 KiB    | `0x1000`   | 8 KiB          | 13 bits
+| 11               | 2 KiB    | `0x1000`   | 8 KiB          | 13 bits
+| 12 (default)     | 4 KiB    | `0x1000`   | 8 KiB          | 13 bits
+| 13               | 8 KiB    | `0x2000`   | 16 KiB         | 14 bits
+| 14               | 16 KiB   | `0x4000`   | 32 KiB         | 15 bits
+| 15               | 32 KiB   | `0x8000`   | 64 KiB         | 16 bits
+| 16               | 64 KiB   | `0x10000`  | 128 KiB        | 17 bits
+|=======================
+
+Below 4 KiB the RAM still starts at `0x1000`, after the registers, so the window stays 8 KiB. From 8 KiB up, the
+RAM is aligned to its own size and the window is twice the RAM.
+
+To change it, edit the value and run `make -C rdl all`. This regenerates the register block VHDL, the C
+header, the HTML register reference and the pyuvm register model; every other consumer follows from them:
+
+[cols="<4,<6"]
+[options="header",grid="rows"]
+|=======================
+| Consumer                                       | Gets the size from
+| RTL (`usb_top`, its RAM, adapters, buffer addresses) | `RAM_ADDR_WIDTH` in the generated `usb_device_regs_pkg.vhd`
+| AXI4-Lite address width                        | `USB_DEVICE_REGS_MIN_ADDR_WIDTH` in the same package
+| Software                                       | `status.ram_words` at run time; the HAL places buffers within it
+| Firmware build                                 | the generated `usb_device_regs.h` (`usb_device_t` layout)
+| UVM testbench                                  | the generated register model in `tb/uvm/usbtb/ral`
+|=======================
+
+.No generic to keep in sync
+[TIP]
+The committed register block cannot go stale silently: `tools/cocotb_runner.py` regenerates it when the RDL
+is newer, and `tb/cocotb/tests/test_generated_registers.py` fails if it differs from what the RDL generates.
+
+
+// ####################################################################################################################
+:sectnums:
+=== Clocks and Resets
+
+[cols="<2,^2,<8"]
+[options="header",grid="rows"]
+|=======================
+| Clock     | Frequency       | Runs
+| `clk_usb` | 48 MHz          | everything that must keep bus timing: the PHY (4x oversampling of the 12 Mbit/s line), packet decoding and encoding, transactions, bus states, the USB port of the RAM
+| `clk_sys` | any (see below) | the register block, the AXI4-Lite port, the CPU port of the RAM
+|=======================
+
+The two clocks may be unrelated. They meet only in the clock-domain crossing block `usb_cdc` and in the
+true dual-port RAM (see <<_clock_domain_crossing>>). Constrain them as asynchronous clock groups, or with
+false paths between them.
+
+.USB clock accuracy
+[IMPORTANT]
+USB 2.0 requires a full-speed device to transmit within ±0.25 % (2500 ppm) of 12 Mbit/s. Derive `clk_usb`
+from a crystal oscillator, e.g. with a PLL; an RC oscillator is not accurate enough.
+
+**System clock.** The core places no fixed requirement on `clk_sys`. The reference system runs it at
+60 MHz. A slow system clock lengthens the clock-domain handshakes; event spacing on the bus leaves a wide
+margin (about 8 to 10 `clk_usb` cycles per handshake against at least about 256 between two transactions),
+so any clock of a few MHz or more is enough for the core. Throughput depends on how fast software empties
+and fills the buffers, which `clk_sys` does affect.
+
+**Resets.** Both resets are asynchronous and low-active. Assert them **together**: the toggle-based
+crossings in `usb_cdc` assume both domains are reset at the same time, and resetting only one domain can
+produce a false arm or event. Release each reset synchronously to its own clock (a reset synchronizer per
+domain). After reset the core is disabled, the pull-up is off and every endpoint is disabled.
+
+
+// ####################################################################################################################
+:sectnums:
+=== Address Space
+
+All registers are 32 bits wide. Offsets are relative to the core's base address, which the integration
+chooses (`0xF0000000` in the reference system).
+
+.Address space (default `RAM_ADDR_WIDTH = 12`)
+[cols="<3,<3,<6"]
+[options="header",grid="rows"]
+|=======================
+| Offset              | Size    | Contents
+| `0x0000` - `0x0023` | 36 B    | global registers
+| `0x0024` - `0x003F` |         | reserved, access returns `SLVERR`
+| `0x0040` - `0x017F` | 320 B   | 16 endpoint register groups of 20 bytes each
+| `0x0180` - `0x0FFF` |         | reserved, access returns `SLVERR`
+| `0x1000` - `0x1FFF` | 4 KiB   | shared buffer RAM (`usb_ram`)
+|=======================
+
+The RAM starts at `0x1000`, or at its own size when that is larger, so it is always aligned to its size.
+<<_register_map>> lists every register.
+
+**Access width.** Access the registers with 32-bit reads and writes. The RAM honours `axil_wstrb`, so
+byte and half-word writes work, but word accesses are faster and the software stack uses only those.
+Data in the RAM is little-endian: byte _i_ of a buffer is bits `[8*(i mod 4)+7 : 8*(i mod 4)]` of word
+`i/4`.
+
+
+// ####################################################################################################################
+:sectnums:
+=== Interrupt
+
+The core has one interrupt output, `irq`, a high-active **level** in the `clk_sys` domain. It is high while
+any bit of the global `interrupt` register is set and enabled in `interrupt_enable`. Interrupt sources are
+organized in three levels:
+
+.Interrupt structure
+image::interrupt_tree.svg[Interrupt structure,width=100%,align=center]
+
+* **Sources:** `endpoint[n].interrupt` (SETUP, transfer complete, zero-length packet, overrun) and
+  `bus_event` (bus reset, suspend, resume, SOF, VBUS). They are sticky and cleared by writing `1`.
+* **Summary:** `interrupt` has one bit per endpoint entry and one for bus events. Its bits are not sticky;
+  they follow the sources.
+* **Output:** `interrupt_enable` selects which summary bits drive `irq`.
+
+Connect `irq` to a level-sensitive interrupt input. The interrupt stays active until software clears every
+enabled cause. <<_interrupt_handling>> shows the handler sequence.
+
+
+// ####################################################################################################################
+:sectnums:
+=== External Circuit
+
+The PHY is digital and uses ordinary FPGA I/O pins. The circuit between the FPGA and the USB connector:
+
+.External circuit
+image::external_circuit.svg[External circuit,width=85%,align=center]
+
+* **D+ and D-** connect to two FPGA pins in a 3.3 V bank (LVCMOS33). Route them as a pair and keep them
+  short.
+* **Pull-up:** a 1.5 kΩ resistor from D+ to `usb_pu`. The core drives `usb_pu` high to attach and leaves it
+  low otherwise, so the host sees the device only when software has requested it (`control.enable_pu`) and
+  VBUS is present, as USB 2.0 section 7.1.5.1 requires.
+* **VBUS** is 5 V. Bring it to `usb_vbus` through a resistor divider or a level shifter that gives a valid
+  logic high at the FPGA's I/O voltage and never exceeds it. A self-powered device must not drive D+ while
+  VBUS is absent; the core gates `usb_pu` with VBUS for this reason.
+* **Power:** the board may be bus-powered or self-powered; the core does not care. Report it correctly in
+  the configuration descriptor.
+
+.Electrical compliance
+[WARNING]
+FPGA LVCMOS outputs are not USB transceivers: their output impedance, edge rates and crossover voltage are
+not specified for USB, and the core has not been through signal-quality testing. The design enumerates
+and runs reliably on the reference board; check signal quality on your own board if compliance matters.
+Series resistors on D+ and D- (typically some tens of ohms, close to the FPGA) can help match the cable
+impedance.

@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="300" viewBox="0 0 820 300">
+<defs>
+<marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#3e4c59"/></marker>
+<marker id="arrow_start" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M 10 0 L 0 5 L 10 10 z" fill="#3e4c59"/></marker>
+</defs>
+<rect x="0" y="0" width="820" height="300" fill="#ffffff"/>
+<rect x="60" y="90" width="220" height="90" rx="40" fill="#cfe6da" stroke="#3e4c59" stroke-width="1.2"/>
+<text x="170" y="131.4" font-family="Arial, Helvetica, sans-serif" font-size="12" text-anchor="middle" font-weight="bold" fill="#1f2933">Software owns</text>
+<text x="170" y="147.0" font-family="Consolas, 'DejaVu Sans Mono', monospace" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2933">status.armed = 0</text>
+<rect x="540" y="90" width="220" height="90" rx="40" fill="#f6cdbf" stroke="#3e4c59" stroke-width="1.2"/>
+<text x="650" y="131.4" font-family="Arial, Helvetica, sans-serif" font-size="12" text-anchor="middle" font-weight="bold" fill="#1f2933">Hardware owns</text>
+<text x="650" y="147.0" font-family="Consolas, 'DejaVu Sans Mono', monospace" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2933">status.armed = 1</text>
+<path d="M 280 115 L 540 115" fill="none" stroke="#3e4c59" stroke-width="1.3" marker-end="url(#arrow)"/>
+<text x="410" y="88.4" font-family="Consolas, 'DejaVu Sans Mono', monospace" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2933">software writes transfer.arm = 1</text>
+<text x="410" y="104.0" font-family="Arial, Helvetica, sans-serif" font-size="10.5" text-anchor="middle" font-weight="normal" fill="#52606d">(IN: with length, in the same write)</text>
+<path d="M 540 155 L 280 155" fill="none" stroke="#3e4c59" stroke-width="1.3" marker-end="url(#arrow)"/>
+<text x="410" y="170.79999999999998" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle" font-weight="bold" fill="#1f2933">transfer completes:</text>
+<text x="410" y="186.39999999999998" font-family="Consolas, 'DejaVu Sans Mono', monospace" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2933">armed = 0, byte_count updated,</text>
+<text x="410" y="202.0" font-family="Consolas, 'DejaVu Sans Mono', monospace" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2933">interrupt.transfer_complete = 1</text>
+<text x="410" y="217.6" font-family="Arial, Helvetica, sans-serif" font-size="10.5" text-anchor="middle" font-weight="normal" fill="#52606d">all in the same clock cycle</text>
+<path d="M 130 90 L 130 40 L 210 40 L 210 90" fill="none" stroke="#3e4c59" stroke-width="1.3" marker-end="url(#arrow)"/>
+<text x="170" y="30" font-family="Arial, Helvetica, sans-serif" font-size="10.5" text-anchor="middle" font-weight="normal" fill="#52606d">OUT packet: NAK + overrun</text>
+<path d="M 610 90 L 610 40 L 690 40 L 690 90" fill="none" stroke="#3e4c59" stroke-width="1.3" marker-end="url(#arrow)"/>
+<text x="650" y="30" font-family="Arial, Helvetica, sans-serif" font-size="10.5" text-anchor="middle" font-weight="normal" fill="#52606d">IN without ACK: resend</text>
+<path d="M 650 180 L 650 260 L 170 260 L 170 180" fill="none" stroke="#3e4c59" stroke-width="1.3" stroke-dasharray="5 3" marker-end="url(#arrow)"/>
+<text x="410" y="280" font-family="Arial, Helvetica, sans-serif" font-size="10.5" text-anchor="middle" font-weight="normal" fill="#52606d">SETUP on a control entry: clears armed on both EP0 entries</text>
+</svg>

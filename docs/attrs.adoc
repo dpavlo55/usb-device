@@ -1,0 +1,40 @@
+:keywords: usb, usb 2.0, full speed, device, fpga, vhdl, ip core, cdc-acm, neorv32, risc-v
+:description: A USB 2.0 full-speed device controller for FPGAs in portable VHDL-2008, with a digital PHY, an AXI4-Lite register interface and a portable C device stack.
+:author: David Pavlović
+:revnumber: v1.0.0
+:icons: font
+:source-highlighter: highlight.js
+:imagesdir: ../figures
+:toc: macro
+:doctype: book
+:sectnums:
+:sectanchors:
+:prewrap!:
+:stem: latexmath
+:reproducible:
+:listing-caption: Listing
+:toclevels: 3
+// Base URL of the Doxygen software reference. The HTML build puts it next to the
+// data sheet (public/sw); override it for the PDF or a hosted copy:
+//   make pdf DOXYGEN_URL=https://<host>/sw
+:doxygen-url: sw
+:usb-spec: USB 2.0 Specification
+// Doxygen pages, one attribute each. Defined here so the double underscores of
+// Doxygen file names never reach inline formatting.
+:dox-files: {doxygen-url}/files.html
+:dox-globals: {doxygen-url}/globals.html
+:dox-annotated: {doxygen-url}/annotated.html
+:dox-index: {doxygen-url}/index.html
+:dox-usb-ll: {doxygen-url}/usb__ll_8h.html
+:dox-usb-ram: {doxygen-url}/usb__ram_8h.html
+:dox-usb-hal: {doxygen-url}/usb__hal_8h.html
+:dox-usbd: {doxygen-url}/usbd_8h.html
+:dox-usbd-class: {doxygen-url}/usbd__class_8h.html
+:dox-usbd-cdc-acm-h: {doxygen-url}/usbd__cdc__acm_8h.html
+:dox-usbd-cdc-acm-c: {doxygen-url}/usbd__cdc__acm_8c.html
+:dox-usb-std: {doxygen-url}/usb__std_8h.html
+:dox-usb-common: {doxygen-url}/usb__common_8h.html
+:dox-usb-config: {doxygen-url}/usb__config__default_8h.html
+:dox-usb-port: {doxygen-url}/usb__port_8h.html
+:dox-port-neorv32-h: {doxygen-url}/usb__port__neorv32_8h.html
+:dox-port-neorv32-c: {doxygen-url}/usb__port__neorv32_8c.html

@@ -1,0 +1,14 @@
+:sectnums:
+== Functional Description
+
+This chapter describes how the core works, block by block. Each section starts with a table of the source
+files, the top entity ports and the registers involved. The register fields named here are defined in
+<<_register_map>>.
+
+include::fn_datapath.adoc[]
+
+include::fn_endpoints.adoc[]
+
+include::fn_bus.adoc[]
+
+include::fn_memory.adoc[]

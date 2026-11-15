@@ -1,0 +1,61 @@
+# The same CDC-ACM device with single-buffered and with double-buffered bulk endpoints:
+# a pair takes two consecutive entries and two buffers. EP0 and the notify endpoint stay single.
+version: 1
+
+figure:
+  title: "Endpoint buffers: single vs. double buffering"
+  footer: "shared RAM, 4 KiB; offsets from usb_ram"
+
+memory:
+  regions:
+    - id: single
+      name: usb_ram
+      space: single
+      start: 0x0000
+      size: 4K
+      children:
+        - id: single_used
+          name: Endpoint buffers
+          size: 264
+          children:
+            - { id: s_e0, name: "E0  EP0 OUT", size: 64, color: "#8fa9c9" }
+            - { id: s_e1, name: "E1  EP0 IN", size: 64, color: "#8fa9c9" }
+            - { id: s_e2, name: "E2  EP1 IN notify", size: 8, color: "#d8c38f" }
+            - { id: s_e3, name: "E3  EP2 OUT", size: 64, color: "#81b29a" }
+            - { id: s_e4, name: "E4  EP2 IN", size: 64, color: "#e07a5f" }
+        - { id: single_free, name: "Free (E5-E15 unused)", size: auto, kind: reserved }
+
+    - id: dbl
+      name: usb_ram
+      space: dbl
+      start: 0x0000
+      size: 4K
+      children:
+        - id: dbl_used
+          name: Endpoint buffers
+          size: 392
+          children:
+            - { id: d_e0, name: "E0  EP0 OUT", size: 64, color: "#8fa9c9" }
+            - { id: d_e1, name: "E1  EP0 IN", size: 64, color: "#8fa9c9" }
+            - { id: d_e2, name: "E2  EP1 IN notify", size: 8, color: "#d8c38f" }
+            - { id: d_e3, name: "E3  EP2 OUT (double_buffer)", size: 64, color: "#81b29a" }
+            - { id: d_e4, name: "E4  EP2 OUT", size: 64, color: "#b5dcc4", note: "2nd buffer of E3" }
+            - { id: d_e5, name: "E5  EP2 IN (double_buffer)", size: 64, color: "#e07a5f" }
+            - { id: d_e6, name: "E6  EP2 IN", size: 64, color: "#f2b19f", note: "2nd buffer of E5" }
+        - { id: dbl_free, name: "Free (E7-E15 unused)", size: auto, kind: reserved }
+
+view:
+  defaults:
+    labels: { address: both, size: true }
+    scale: { mode: weighted, min_height: 26 }
+  columns:
+    - { id: c_single, root: single, title: "Single buffer", width: 120 }
+    - { id: c_dbl, root: dbl, title: "Double buffering", width: 120 }
+  expand:
+    - { region: single_used, from: c_single, title: "Single: buffers" }
+    - { region: dbl_used, from: c_dbl, title: "Double: buffers" }
+
+style:
+  palette: color
+  connectors: dashed
+  reserved: { show_label: true }

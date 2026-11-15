@@ -1,0 +1,14 @@
+PROJECT_NAME     = "USB device library"
+INPUT            = ../docs/doxygen_main.md usb/include usb/src port/neorv32
+USE_MDFILE_AS_MAINPAGE = ../docs/doxygen_main.md
+FILE_PATTERNS    = *.h *.c *.md
+RECURSIVE        = YES
+OUTPUT_DIRECTORY = build/doxygen
+EXTRACT_ALL      = YES
+EXTRACT_STATIC   = YES
+OPTIMIZE_OUTPUT_FOR_C = YES
+GENERATE_LATEX   = NO
+HAVE_DOT         = YES
+CALL_GRAPH       = YES
+CALLER_GRAPH     = YES
+DOT_PATH         = "C:/Program Files/Graphviz/bin"

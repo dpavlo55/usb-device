@@ -1,0 +1,900 @@
+addrmap usb_device #(
+    longint unsigned RAM_ADDR_WIDTH = 12
+) {
+    name = "usb_device";
+    desc = "
+        Configuration and status address space of the **USB 2.0 Full-Speed device** core.
+
+        * Global registers: identification, version, core and pull-up control, status and interrupts.
+        * `endpoint[16]`: one register file per endpoint entry.
+        * `usb_ram`: shared RAM holding the endpoint buffers, at offset `0x1000`, or at its own size when that is larger (an external block must be aligned to its size).
+
+        The registers are in the `clk_sys` domain. Everything that crosses into
+        the USB clock domain goes through the `usb_cdc` block.
+        ";
+
+    default regwidth = 32;
+    default accesswidth = 32;
+    default sw = rw;
+    default hw = r;
+    littleendian;
+
+    reg {
+        name = "core_id";
+        desc = "Core identification register.";
+
+        field {
+            name = "id";
+            desc = "Constant core ID, reads `0x600DC0DE`.";
+            sw = r;
+            hw = na;
+        } id[31:0] = 0x600D_C0DE;
+
+    } core_id;
+
+    reg {
+        name = "USB device version register";
+        desc = "Version of the USB device core in `MAJOR.MINOR.PATCH` format.";
+
+        field {
+            name = "major";
+            desc = "Major version number.";
+            sw = r;
+            hw = na;
+        } major[23:16] = 0x1;
+
+        field {
+            name = "minor";
+            desc = "Minor version number.";
+            sw = r;
+            hw = na;
+        } minor[15:8] = 0x0;
+
+        field {
+            name = "patch";
+            desc = "Patch version number.";
+            sw = r;
+            hw = na;
+        } patch[7:0] = 0x0;
+
+    } version;
+
+    reg {
+        name = "control";
+        desc = "Global control of the USB device core.";
+
+        field {
+            name = "remote_wakeup";
+            desc = "
+                Write `1` to signal remote wakeup. Ignored unless `status.suspended`
+                is `1`. Hardware waits until the bus has been idle for 5 ms (TWTRSM),
+                drives resume (K) for 2 ms and then releases the bus; the host's own
+                resume signaling ends the suspend (`bus_event.resume`). Reads as `0`.
+
+                Write it only while the host has enabled `DEVICE_REMOTE_WAKEUP`.
+                ";
+            sw = w;
+            hw = r;
+            singlepulse;
+        } remote_wakeup[2:2] = 0x0;
+
+        field {
+            name = "enable_pu";
+            desc = "
+                Requests the D+ pull-up. Hardware drives it only while VBUS is
+                present (`status.vbus_present`), as USB 2.0 section 7.1.5.1 requires,
+                so the pull-up follows plug and unplug without software.
+
+                * `0`: detached; the host does not see the device.
+                * `1`: attached while VBUS is present; signals a Full-Speed device to
+                  the host.
+                ";
+        } enable_pu[1:1] = 0x0;
+
+        field {
+            name = "enable";
+            desc = "
+                Enables the USB device core.
+
+                While `0`, every endpoint is inactive regardless of its own `enable`:
+                no packet is written to RAM, no IN packet is sent and no transfer
+                event is raised. Armed buffers stay armed and are used once the
+                core is enabled again.
+                ";
+        } enable_core[0:0] = 0x0;
+
+    } control;
+
+    reg {
+        name = "status_ram";
+        desc = "Global status of the USB device core.";
+
+        field {
+            name = "words";
+            desc = "
+                Size of the shared USB RAM in 32-bit words, so that the largest RAM
+                (64 KiB) fits; the size in bytes is `4 * ram_words`:
+
+                $$\\mathrm{ram\\_words} = 2^{\\mathrm{RAM\\_ADDR\\_WIDTH} - 2}$$
+                ";
+            sw = r;
+            hw = na;
+        } ram_words[31:16] = 2 ** (RAM_ADDR_WIDTH - 2);
+
+        field {
+            name = "frame_number";
+            desc = "
+                Frame number of the last Start-of-Frame packet received with a good
+                PID and CRC (`0` after reset). The host sends one per millisecond;
+                the value holds while the bus is suspended.
+                ";
+            sw = r;
+            hw = w;
+        } frame_number[12:2] = 0x0;
+
+        field {
+            name = "suspended";
+            desc = "`1` while the bus is suspended: set after 3 ms of idle (J) bus while the D+ pull-up is driven (`control.enable_pu` is `1` and VBUS is present), cleared by any non-idle signaling (resume or bus reset), by clearing `enable_pu` or by losing VBUS.";
+            sw = r;
+            hw = w;
+        } suspended[1:1] = 0x0;
+
+        field {
+            name = "vbus_present";
+            desc = "`1` while VBUS is present, i.e. the device is plugged into a powered host port.";
+            sw = r;
+            hw = w;
+        } vbus_present[0:0] = 0x0;
+
+    } status;
+
+    reg {
+        name = "device_address";
+        desc = "USB device address assigned by the host with `SET_ADDRESS`.";
+
+        field {
+            name = "address";
+            desc = "
+                Hardware answers only tokens addressed to this value; every other
+                token is ignored. Cleared to `0` by hardware on a bus reset.
+
+                Software writes the new address only after the status stage of
+                `SET_ADDRESS` has completed, i.e. after `interrupt.transfer_complete`
+                of the control IN entry that sent the zero-length status packet.
+                ";
+            sw = rw;
+            hw = r;
+            hwclr;
+        } address[6:0] = 0x0;
+
+    } device_address;
+
+    reg bus_event_enable {
+        name = "bus_event_enable";
+        desc = "Enables for the `bus_event` register.";
+        default sw = rw;
+        default hw = na;
+
+        field fieldname {};
+
+        fieldname vbus_en[4:4] = 0x0;
+        vbus_en->name = "vbus_en";
+        vbus_en->desc = "Enables `bus_event.vbus`.";
+
+        fieldname sof_en[3:3] = 0x0;
+        sof_en->name = "sof_en";
+        sof_en->desc = "Enables `bus_event.sof`.";
+
+        fieldname resume_en[2:2] = 0x0;
+        resume_en->name = "resume_en";
+        resume_en->desc = "Enables `bus_event.resume`.";
+
+        fieldname suspend_en[1:1] = 0x0;
+        suspend_en->name = "suspend_en";
+        suspend_en->desc = "Enables `bus_event.suspend`.";
+
+        fieldname bus_reset_en[0:0] = 0x0;
+        bus_reset_en->name = "bus_reset_en";
+        bus_reset_en->desc = "Enables `bus_event.bus_reset`.";
+    };
+
+    reg bus_event {
+        name = "bus_event";
+        desc = "
+            Bus-level events. Bits are set by hardware and cleared by writing `1`
+            (clear with a full-word write of only the bits to clear).
+            ";
+        default sw = rw;
+        default hw = w;
+        default woclr;
+        default precedence = hw;
+
+        field fieldname {
+            posedge intr;
+        };
+
+        fieldname vbus[4:4] = 0x0;
+        vbus->name = "vbus";
+        vbus->desc = "
+            VBUS appeared or went away (the device was plugged in or unplugged);
+            `status.vbus_present` holds the new level. Hardware already gates the
+            D+ pull-up with VBUS; software returns to the Detached state on loss.
+            ";
+
+        fieldname sof[3:3] = 0x0;
+        sof->name = "sof";
+        sof->desc = "A Start-of-Frame packet was received.";
+
+        fieldname resume[2:2] = 0x0;
+        resume->name = "resume";
+        resume->desc = "Non-idle signaling ended a suspend: the host's resume, or a bus reset (which also sets `bus_reset`).";
+
+        fieldname suspend[1:1] = 0x0;
+        suspend->name = "suspend";
+        suspend->desc = "The bus has been idle for 3 ms; the device must enter suspend.";
+
+        fieldname bus_reset[0:0] = 0x0;
+        bus_reset->name = "bus_reset";
+        bus_reset->desc = "
+            A USB bus reset (SE0 for at least 2.5 us) was detected.
+
+            Hardware clears `device_address`. Software must return to the Default
+            state: disable every endpoint except the control endpoint and clear all
+            stalls.
+            ";
+    };
+
+    bus_event_enable bus_event_enable;
+    bus_event bus_event;
+
+    bus_event.vbus->enable = bus_event_enable.vbus_en;
+    bus_event.sof->enable = bus_event_enable.sof_en;
+    bus_event.resume->enable = bus_event_enable.resume_en;
+    bus_event.suspend->enable = bus_event_enable.suspend_en;
+    bus_event.bus_reset->enable = bus_event_enable.bus_reset_en;
+
+    reg interrupt_enable {
+        name = "interrupt_enable";
+        desc = "Selects which bits of the global `interrupt` register drive the `irq` output.";
+        default sw = rw;
+        default hw = na;
+
+        field {
+            name = "bus_event_enable";
+            desc = "Lets `interrupt.bus_event` drive `irq`.";
+        } bus_event_enable[16:16] = 0x0;
+
+        field {
+            name = "endpoint_15_enable";
+            desc = "Lets `interrupt.endpoint_15` drive `irq`.";
+        } endpoint_15_enable[15:15] = 0x0;
+
+        field {
+            name = "endpoint_14_enable";
+            desc = "Lets `interrupt.endpoint_14` drive `irq`.";
+        } endpoint_14_enable[14:14] = 0x0;
+
+        field {
+            name = "endpoint_13_enable";
+            desc = "Lets `interrupt.endpoint_13` drive `irq`.";
+        } endpoint_13_enable[13:13] = 0x0;
+
+        field {
+            name = "endpoint_12_enable";
+            desc = "Lets `interrupt.endpoint_12` drive `irq`.";
+        } endpoint_12_enable[12:12] = 0x0;
+
+        field {
+            name = "endpoint_11_enable";
+            desc = "Lets `interrupt.endpoint_11` drive `irq`.";
+        } endpoint_11_enable[11:11] = 0x0;
+
+        field {
+            name = "endpoint_10_enable";
+            desc = "Lets `interrupt.endpoint_10` drive `irq`.";
+        } endpoint_10_enable[10:10] = 0x0;
+
+        field {
+            name = "endpoint_9_enable";
+            desc = "Lets `interrupt.endpoint_9` drive `irq`.";
+        } endpoint_9_enable[9:9] = 0x0;
+
+        field {
+            name = "endpoint_8_enable";
+            desc = "Lets `interrupt.endpoint_8` drive `irq`.";
+        } endpoint_8_enable[8:8] = 0x0;
+
+        field {
+            name = "endpoint_7_enable";
+            desc = "Lets `interrupt.endpoint_7` drive `irq`.";
+        } endpoint_7_enable[7:7] = 0x0;
+
+        field {
+            name = "endpoint_6_enable";
+            desc = "Lets `interrupt.endpoint_6` drive `irq`.";
+        } endpoint_6_enable[6:6] = 0x0;
+
+        field {
+            name = "endpoint_5_enable";
+            desc = "Lets `interrupt.endpoint_5` drive `irq`.";
+        } endpoint_5_enable[5:5] = 0x0;
+
+        field {
+            name = "endpoint_4_enable";
+            desc = "Lets `interrupt.endpoint_4` drive `irq`.";
+        } endpoint_4_enable[4:4] = 0x0;
+
+        field {
+            name = "endpoint_3_enable";
+            desc = "Lets `interrupt.endpoint_3` drive `irq`.";
+        } endpoint_3_enable[3:3] = 0x0;
+
+        field {
+            name = "endpoint_2_enable";
+            desc = "Lets `interrupt.endpoint_2` drive `irq`.";
+        } endpoint_2_enable[2:2] = 0x0;
+
+        field {
+            name = "endpoint_1_enable";
+            desc = "Lets `interrupt.endpoint_1` drive `irq`.";
+        } endpoint_1_enable[1:1] = 0x0;
+
+        field {
+            name = "endpoint_0_enable";
+            desc = "Lets `interrupt.endpoint_0` drive `irq`.";
+        } endpoint_0_enable[0:0] = 0x0;
+
+    };
+
+    reg interrupt {
+        name = "interrupt";
+        desc = "
+            Global interrupt summary: one bit per endpoint plus one for bus events.
+
+            An endpoint bit is `1` while its endpoint has an interrupt that is both
+            pending and enabled in `endpoint[n].interrupt_enable`; `bus_event` is `1`
+            while the `bus_event` register has an event that is both pending and
+            enabled in `bus_event_enable`. The bits show pending causes whatever
+            `interrupt_enable` holds; `interrupt_enable` selects which of them drive
+            the `irq` output. The bits are not sticky: clear the cause in
+            `endpoint[n].interrupt` or `bus_event`.
+            ";
+        default sw = r;
+        default hw = w;
+
+        field endpoint_interrupt {
+            nonsticky intr;
+        };
+
+        endpoint_interrupt bus_event[16:16] = 0x0;
+        bus_event->name = "bus_event";
+        bus_event->desc = "`bus_event` has a pending, enabled event.";
+
+        endpoint_interrupt endpoint_15[15:15] = 0x0;
+        endpoint_15->name = "endpoint_15";
+        endpoint_15->desc = "Endpoint 15 has a pending, enabled interrupt.";
+
+        endpoint_interrupt endpoint_14[14:14] = 0x0;
+        endpoint_14->name = "endpoint_14";
+        endpoint_14->desc = "Endpoint 14 has a pending, enabled interrupt.";
+
+        endpoint_interrupt endpoint_13[13:13] = 0x0;
+        endpoint_13->name = "endpoint_13";
+        endpoint_13->desc = "Endpoint 13 has a pending, enabled interrupt.";
+
+        endpoint_interrupt endpoint_12[12:12] = 0x0;
+        endpoint_12->name = "endpoint_12";
+        endpoint_12->desc = "Endpoint 12 has a pending, enabled interrupt.";
+
+        endpoint_interrupt endpoint_11[11:11] = 0x0;
+        endpoint_11->name = "endpoint_11";
+        endpoint_11->desc = "Endpoint 11 has a pending, enabled interrupt.";
+
+        endpoint_interrupt endpoint_10[10:10] = 0x0;
+        endpoint_10->name = "endpoint_10";
+        endpoint_10->desc = "Endpoint 10 has a pending, enabled interrupt.";
+
+        endpoint_interrupt endpoint_9[9:9] = 0x0;
+        endpoint_9->name = "endpoint_9";
+        endpoint_9->desc = "Endpoint 9 has a pending, enabled interrupt.";
+
+        endpoint_interrupt endpoint_8[8:8] = 0x0;
+        endpoint_8->name = "endpoint_8";
+        endpoint_8->desc = "Endpoint 8 has a pending, enabled interrupt.";
+
+        endpoint_interrupt endpoint_7[7:7] = 0x0;
+        endpoint_7->name = "endpoint_7";
+        endpoint_7->desc = "Endpoint 7 has a pending, enabled interrupt.";
+
+        endpoint_interrupt endpoint_6[6:6] = 0x0;
+        endpoint_6->name = "endpoint_6";
+        endpoint_6->desc = "Endpoint 6 has a pending, enabled interrupt.";
+
+        endpoint_interrupt endpoint_5[5:5] = 0x0;
+        endpoint_5->name = "endpoint_5";
+        endpoint_5->desc = "Endpoint 5 has a pending, enabled interrupt.";
+
+        endpoint_interrupt endpoint_4[4:4] = 0x0;
+        endpoint_4->name = "endpoint_4";
+        endpoint_4->desc = "Endpoint 4 has a pending, enabled interrupt.";
+
+        endpoint_interrupt endpoint_3[3:3] = 0x0;
+        endpoint_3->name = "endpoint_3";
+        endpoint_3->desc = "Endpoint 3 has a pending, enabled interrupt.";
+
+        endpoint_interrupt endpoint_2[2:2] = 0x0;
+        endpoint_2->name = "endpoint_2";
+        endpoint_2->desc = "Endpoint 2 has a pending, enabled interrupt.";
+
+        endpoint_interrupt endpoint_1[1:1] = 0x0;
+        endpoint_1->name = "endpoint_1";
+        endpoint_1->desc = "Endpoint 1 has a pending, enabled interrupt.";
+
+        endpoint_interrupt endpoint_0[0:0] = 0x0;
+        endpoint_0->name = "endpoint_0";
+        endpoint_0->desc = "Endpoint 0 has a pending, enabled interrupt.";
+
+    };
+
+    interrupt_enable interrupt_enable;
+    interrupt interrupt;
+
+    interrupt.bus_event->enable = interrupt_enable.bus_event_enable;
+    interrupt.bus_event->next = bus_event->intr;
+    interrupt.endpoint_0->enable = interrupt_enable.endpoint_0_enable;
+    interrupt.endpoint_1->enable = interrupt_enable.endpoint_1_enable;
+    interrupt.endpoint_2->enable = interrupt_enable.endpoint_2_enable;
+    interrupt.endpoint_3->enable = interrupt_enable.endpoint_3_enable;
+    interrupt.endpoint_4->enable = interrupt_enable.endpoint_4_enable;
+    interrupt.endpoint_5->enable = interrupt_enable.endpoint_5_enable;
+    interrupt.endpoint_6->enable = interrupt_enable.endpoint_6_enable;
+    interrupt.endpoint_7->enable = interrupt_enable.endpoint_7_enable;
+    interrupt.endpoint_8->enable = interrupt_enable.endpoint_8_enable;
+    interrupt.endpoint_9->enable = interrupt_enable.endpoint_9_enable;
+    interrupt.endpoint_10->enable = interrupt_enable.endpoint_10_enable;
+    interrupt.endpoint_11->enable = interrupt_enable.endpoint_11_enable;
+    interrupt.endpoint_12->enable = interrupt_enable.endpoint_12_enable;
+    interrupt.endpoint_13->enable = interrupt_enable.endpoint_13_enable;
+    interrupt.endpoint_14->enable = interrupt_enable.endpoint_14_enable;
+    interrupt.endpoint_15->enable = interrupt_enable.endpoint_15_enable;
+
+    enum endpoint_kind_e {
+        CONTROL     = 0x0 { desc = "Control endpoint"; };
+        BULK        = 0x1 { desc = "Bulk endpoint"; };
+        INTERRUPT   = 0x2 { desc = "Interrupt endpoint"; };
+        ISOCHRONOUS = 0x3 { desc = "Isochronous endpoint"; };
+    };
+
+    enum endpoint_direction_e {
+        IN  = 0x0 { desc = "Device to host."; };
+        OUT = 0x1 { desc = "Host to device."; };
+    };
+
+    enum ram_size_e {
+        SIZE_8    = 0x0 { desc = "8 bytes"; };
+        SIZE_16   = 0x1 { desc = "16 bytes"; };
+        SIZE_32   = 0x2 { desc = "32 bytes"; };
+        SIZE_64   = 0x3 { desc = "64 bytes"; };
+        SIZE_128  = 0x4 { desc = "128 bytes"; };
+        SIZE_256  = 0x5 { desc = "256 bytes"; };
+        SIZE_512  = 0x6 { desc = "512 bytes"; };
+        SIZE_1024 = 0x7 { desc = "1024 bytes"; };
+    };
+
+    regfile {
+        desc = "
+            Configuration, buffer ownership and interrupts of one endpoint entry.
+
+            Each entry owns one buffer in the shared RAM. The buffer belongs either
+            to software or to hardware:
+
+            1. Software writes `transfer.arm` to hand the buffer to hardware;
+               `status.armed` becomes `1`.
+            2. Hardware completes one transfer: one OUT packet is received into the
+               buffer, or `transfer.length` bytes are sent on one IN request.
+            3. Hardware hands the buffer back: `status.armed` returns to `0`,
+               `status.byte_count` is updated and `interrupt.transfer_complete` is
+               set, all at the same time.
+
+            While `status.armed` is `0`, hardware never writes the buffer, except for
+            a SETUP on a control entry (see below). An OUT
+            packet arriving then is answered with NAK and raises `interrupt.overrun`;
+            an IN token is answered with NAK.
+
+            An entry serves USB endpoint `control.endpoint_number` in `control.direction`.
+            Hardware answers a token for an enabled entry with STALL while
+            `control.stall` is `1`, otherwise with ACK/data when armed and NAK when
+            not. Tokens for which no entry is enabled get no answer.
+
+            Hardware keeps the data toggle of each entry: it sends DATA0/DATA1
+            alternately on IN and accepts OUT data only with the expected PID (a
+            repeated packet with the old PID is ACKed and dropped).
+            `transfer.reset_toggle` returns the toggle to DATA0.
+
+            **Control entries** (`kind = CONTROL`): the OUT entry also takes SETUP
+            packets. A SETUP whose data is DATA0, exactly 8 bytes and has a good CRC
+            is always ACKed, even when the entry is not armed or is stalled. Only then
+            does hardware write its 8 bytes to the start of the entry's buffer,
+            overwriting whatever it held; afterwards it sets `status.byte_count` to `8`
+            and sets `interrupt.setup`. SETUP data that is not ACKed writes nothing,
+            and a SETUP never writes more than 8 bytes. For both entries with the same `endpoint_number` it
+            clears `stall` and `status.armed`, and sets the next DATA PID to DATA1.
+
+            Software must read the SETUP bytes before it arms the OUT entry for the
+            data stage, since the data stage reuses the same buffer.
+
+            **Double buffering** (`control.double_buffer = 1` on entry n, n < 15,
+            `kind` not `CONTROL`): entry n+1 becomes the second buffer of the same
+            endpoint, so the host can move the next packet while software handles
+            the previous one. Configure entry n+1 like entry n (same
+            `endpoint_number`, `kind`, `direction`, enabled) with its own
+            `base_address` and `size`. Hardware then never matches a token to entry
+            n+1; it serves each token of entry n from the buffer that
+            `status.next_buffer` of entry n selects:
+
+            * That buffer armed: the transaction runs on it, and when it completes
+              that entry reports it (`status`, `interrupt`) and `next_buffer` flips.
+            * Not armed: NAK (no answer for isochronous), and an OUT packet raises
+              `interrupt.overrun` on that entry. Hardware never skips to the other
+              buffer, so packets always alternate between the two entries.
+
+            Entry n's `stall` and data toggle serve both entries; entry n+1's
+            `stall` and `transfer.reset_toggle` are ignored. Arm the two entries
+            alternately, starting with entry n.
+            ";
+
+        reg {
+            name = "control";
+            desc = "
+                Endpoint configuration.
+
+                !!! danger \"Change only while the endpoint is disabled\"
+                    Write `base_address`, `size`, `kind` and `direction` only while
+                    `enable` is `0`. They may be written in the same write that sets
+                    `enable`. Changing them while the endpoint is enabled can corrupt
+                    a transfer in progress.
+                ";
+
+            field {
+                name = "base_address";
+                desc = "Byte address of the endpoint buffer in the shared USB RAM.";
+            } base_address[16 + RAM_ADDR_WIDTH - 1:16] = 0x0;
+
+            field {
+                name = "split";
+                desc = "
+                    IN entries: sends a transfer as packets of
+                    $$\\text{packet} = 2^{\\,\\text{size} + 3 - \\text{split}}$$
+                    bytes, so one `transfer.arm` moves up to the whole buffer with
+                    one event. Each IN token while armed sends the next
+                    `min(remaining, packet)` bytes; a packet that the host does not
+                    ACK is sent again. The packet that is shorter than `packet` or
+                    that sends the last of `transfer.length` bytes completes the
+                    transfer; a transfer that is a multiple of `packet` ends without
+                    a zero-length packet (arm one with `length = 0`). `0` sends each
+                    transfer as one packet. Must not exceed `size`; ignored for OUT.
+                    Change only while `enable` is `0`.
+                    ";
+            } split[15:13] = 0x0;
+
+            field {
+                name = "double_buffer";
+                desc = "
+                    Pairs this entry with entry n+1 as the second buffer of the same
+                    endpoint (see the entry description). Ignored on entry 15 and
+                    when `kind` is `CONTROL`. Change only while `enable` is `0`.
+                    ";
+            } double_buffer[12:12] = 0x0;
+
+            field {
+                name = "endpoint_number";
+                desc = "USB endpoint number (0 to 15) served by this entry.";
+            } endpoint_number[11:8] = 0x0;
+
+            field {
+                name = "stall";
+                desc = "
+                    Halts the entry: IN and OUT tokens are answered with STALL.
+
+                    Set by software for `SET_FEATURE(ENDPOINT_HALT)` and for a request
+                    error on a control endpoint; cleared by software, and by hardware
+                    on a control entry when a SETUP packet arrives.
+                    ";
+                sw = rw;
+                hw = r;
+                hwclr;
+            } stall[7:7] = 0x0;
+
+            field {
+                name = "size";
+                desc = "
+                    Number of bytes allocated to the endpoint buffer:
+
+                    $$\\text{bytes} = 2^{\\,\\text{size} + 3}$$
+
+                    The buffer spans
+                    $[\\mathrm{base\\_address},\\ \\mathrm{base\\_address} + \\text{bytes})$.
+
+                    Hardware never accesses bytes outside it. An OUT data packet with
+                    more bytes than the buffer holds is a packet error: it gets no
+                    handshake, its bytes past the buffer are not written, it raises no
+                    event, and the data toggle does not change (the host retries). An
+                    IN packet sends at most this many bytes. Set it to at least the
+                    endpoint's `wMaxPacketSize`. Change it only while `enable` is `0`.
+                    ";
+                encode = ram_size_e;
+            } size[6:4] = 0x0;
+
+            field {
+                name = "kind";
+                desc = "
+                    USB transfer type of the endpoint. `CONTROL` OUT entries take SETUP
+                    packets; `ISOCHRONOUS` entries send and expect no handshakes.
+                    ";
+                encode = endpoint_kind_e;
+            } kind[3:2] = endpoint_kind_e::CONTROL;
+
+            field {
+                name = "direction";
+                desc = "Direction of the endpoint, as seen from the host.";
+                encode = endpoint_direction_e;
+            } direction[1:1] = endpoint_direction_e::IN;
+
+            field {
+                name = "enable";
+                desc = "
+                    Enables the endpoint. The endpoint is active while both this bit and
+                    `control.enable_core` are `1`.
+
+                    A disabled endpoint ignores OUT packets and IN requests and raises no
+                    events. Its buffer may still be armed.
+                    ";
+            } enable[0:0] = 0x0;
+
+        } control @ 0x0;
+
+        reg {
+            name = "transfer";
+            desc = "
+                Hands the endpoint buffer to hardware for one transfer.
+
+                For an IN endpoint, write `length` and `arm = 1` in a **single** write.
+                ";
+
+            field {
+                name = "arm";
+                desc = "
+                    Write `1` to hand the buffer to hardware. Reads as `0`.
+
+                    * **OUT:** the buffer receives the next OUT packet.
+                    * **IN:** `length` bytes from the buffer are sent on the next IN request.
+
+                    Arming is accepted whether or not the endpoint is enabled. Do not
+                    arm a buffer that is already armed.
+                    ";
+                sw = w;
+                hw = r;
+                singlepulse;
+            } arm[31:31] = 0x0;
+
+            field {
+                name = "reset_toggle";
+                desc = "
+                    Write `1` to return the data toggle to DATA0, as required after
+                    `SET_CONFIGURATION`, `SET_INTERFACE` and `CLEAR_FEATURE(ENDPOINT_HALT)`.
+                    Reads as `0`.
+                    ";
+                sw = w;
+                hw = r;
+                singlepulse;
+            } reset_toggle[30:30] = 0x0;
+
+            field {
+                name = "length";
+                desc = "
+                    **IN:** number of bytes to send,
+                    $0 \\le \\text{length} \\le 1023$. `0` sends a zero-length packet.
+                    A length above the buffer size (`control.size`) sends the whole
+                    buffer instead. Ignored for OUT.
+
+                    Hardware captures the value on `arm`. Do not change it while
+                    `status.armed` is `1`.
+                    ";
+                sw = rw;
+                hw = r;
+            } length[9:0] = 0x0;
+
+        } transfer;
+
+        reg {
+            name = "status";
+            desc = "Endpoint buffer status. Read-only.";
+
+            field {
+                name = "armed";
+                desc = "
+                    Buffer ownership.
+
+                    * `1`: hardware owns the buffer. Set by `transfer.arm`.
+                    * `0`: software owns the buffer. Cleared when the transfer completes,
+                      in the same cycle as `interrupt.transfer_complete` is set.
+
+                    An overrun does not change this bit.
+                    ";
+                sw = r;
+                hw = r;
+                hwset;
+                hwclr;
+            } armed[31:31] = 0x0;
+
+            field {
+                name = "next_buffer";
+                desc = "
+                    With `control.double_buffer = 1`: the buffer of the next completed
+                    transfer. `0`: this entry, `1`: entry n+1. Set by a completed
+                    transfer on this entry, cleared by one on entry n+1, by a bus reset
+                    and while `control.enable` or `control.double_buffer` is `0`.
+                    `transfer.reset_toggle` does not change it.
+                    ";
+                sw = r;
+                hw = r;
+                hwset;
+                hwclr;
+            } next_buffer[30:30] = 0x0;
+
+            field {
+                name = "byte_count";
+                desc = "
+                    Result of the last completed transfer, updated together with
+                    `interrupt.transfer_complete`:
+
+                    * **OUT:** number of bytes received, $0 \\le \\mathrm{byte\\_count} \\le 1023$.
+                      Read this many bytes from `control.base_address`.
+                    * **IN:** `0` once the buffer has been sent.
+                    * **SETUP** (control OUT entry): `8`, updated together with
+                      `interrupt.setup`.
+
+                    An overrun does not change this field.
+                    ";
+                sw = r;
+                hw = w;
+                we;
+            } byte_count[9:0] = 0x0;
+
+        } status;
+
+        reg interrupt_enable {
+            name = "interrupt_enable";
+            desc = "Per-endpoint interrupt enables. A pending bit that is enabled here drives `interrupt.endpoint_n`.";
+
+            field fieldname {
+                hw = na;
+                sw = rw;
+            };
+
+            fieldname overrun_en[4:4] = 0x0;
+            overrun_en->name = "overrun_en";
+            overrun_en->desc = "Enables `interrupt.overrun`.";
+
+            fieldname zlp_en[3:3] = 0x0;
+            zlp_en->name = "zlp_en";
+            zlp_en->desc = "Enables `interrupt.zlp`.";
+
+            fieldname transfer_complete_en[2:2] = 0x0;
+            transfer_complete_en->name = "transfer_complete_en";
+            transfer_complete_en->desc = "Enables `interrupt.transfer_complete`.";
+
+            fieldname crc_error_en[1:1] = 0x0;
+            crc_error_en->name = "crc_error_en";
+            crc_error_en->desc = "Enables `interrupt.crc_error`.";
+
+            fieldname setup_en[0:0] = 0x0;
+            setup_en->name = "setup_en";
+            setup_en->desc = "Enables `interrupt.setup`.";
+        };
+
+        reg interrupt {
+            name = "interrupt";
+            desc = "
+                Per-endpoint interrupt status. Bits are set by hardware events and
+                cleared by writing `1`.
+
+                > Clear with a full-word write of only the bits to clear, e.g.
+                > `interrupt = TRANSFER_COMPLETE_bm`. A read-modify-write of one bit
+                > writes back every pending `1` and clears them all.
+
+                A hardware event in the same cycle as a clear wins.
+                ";
+            default sw = rw;
+            default hw = w;
+            default woclr;
+            default precedence = hw;
+
+            field fieldname {
+                posedge intr;
+            };
+
+            fieldname overrun[4:4] = 0x0;
+            overrun->name = "overrun";
+            overrun->desc = "
+                An OUT packet arrived while the buffer was not armed.
+
+                The packet was NAKed and dropped: the buffer, `status.armed` and
+                `status.byte_count` are unchanged, so data not yet read is safe.
+                ";
+
+            fieldname zlp[3:3] = 0x0;
+            zlp->name = "zlp";
+            zlp->desc = "
+                The completed OUT transfer was a zero-length packet.
+
+                Always set together with `transfer_complete`, with
+                `status.byte_count = 0`.
+                ";
+
+            fieldname transfer_complete[2:2] = 0x0;
+            transfer_complete->name = "transfer_complete";
+            transfer_complete->desc = "
+                The armed transfer completed and the buffer is back with software.
+
+                `status.armed` is `0` and `status.byte_count` holds the result.
+                Re-arm with `transfer.arm` to start the next transfer.
+                ";
+
+            fieldname crc_error[1:1] = 0x0;
+            crc_error->name = "crc_error";
+            crc_error->desc = "CRC error. *Not implemented yet.*";
+
+            fieldname setup[0:0] = 0x0;
+            setup->name = "setup";
+            setup->desc = "
+                A SETUP packet was received on this control entry; its 8 bytes are at
+                the start of the entry's buffer. A SETUP cancels any control transfer
+                in progress.
+                ";
+
+        };
+
+        interrupt_enable interrupt_enable;
+        interrupt interrupt;
+
+        interrupt.overrun->enable = interrupt_enable.overrun_en;
+        interrupt.zlp->enable = interrupt_enable.zlp_en;
+        interrupt.transfer_complete->enable = interrupt_enable.transfer_complete_en;
+        interrupt.crc_error->enable = interrupt_enable.crc_error_en;
+        interrupt.setup->enable = interrupt_enable.setup_en;
+
+    } endpoint[16];
+
+    interrupt.endpoint_0->next = endpoint[0].interrupt->intr;
+    interrupt.endpoint_1->next = endpoint[1].interrupt->intr;
+    interrupt.endpoint_2->next = endpoint[2].interrupt->intr;
+    interrupt.endpoint_3->next = endpoint[3].interrupt->intr;
+    interrupt.endpoint_4->next = endpoint[4].interrupt->intr;
+    interrupt.endpoint_5->next = endpoint[5].interrupt->intr;
+    interrupt.endpoint_6->next = endpoint[6].interrupt->intr;
+    interrupt.endpoint_7->next = endpoint[7].interrupt->intr;
+    interrupt.endpoint_8->next = endpoint[8].interrupt->intr;
+    interrupt.endpoint_9->next = endpoint[9].interrupt->intr;
+    interrupt.endpoint_10->next = endpoint[10].interrupt->intr;
+    interrupt.endpoint_11->next = endpoint[11].interrupt->intr;
+    interrupt.endpoint_12->next = endpoint[12].interrupt->intr;
+    interrupt.endpoint_13->next = endpoint[13].interrupt->intr;
+    interrupt.endpoint_14->next = endpoint[14].interrupt->intr;
+    interrupt.endpoint_15->next = endpoint[15].interrupt->intr;
+
+    mem ram {
+        mementries = 2 ** RAM_ADDR_WIDTH;
+        memwidth = 8;
+        sw = rw;
+        name = "ram";
+        desc = "
+            Shared USB RAM holding the endpoint buffers. Software accesses it as
+            32-bit little-endian words: byte $i$ is bits
+            $[8(i \\bmod 4) + 7 : 8(i \\bmod 4)]$ of word $\\lfloor i/4 \\rfloor$.
+            ";
+    };
+
+    external ram usb_ram @(2 ** RAM_ADDR_WIDTH > 0x1000 ? 2 ** RAM_ADDR_WIDTH : 0x1000);
+
+};

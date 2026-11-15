@@ -1,0 +1,88 @@
+<svg height="408.87" viewBox="0 0 557.47 408.87" width="557.47" xmlns="http://www.w3.org/2000/svg">
+<rect fill="#ffffff" height="408.87" width="557.47" x="0" y="0"/>
+<rect fill="none" height="360.87" stroke="#000000" stroke-width="1" width="537.47" x="10" y="38"/>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="13.2" font-weight="bold" text-anchor="middle" x="278.74" y="23.2">usb_top address space and shared RAM (cdc_bench)</text>
+<polyline fill="none" points="247.47,77.2 407.47,77.2" stroke="#000000" stroke-dasharray="4 3" stroke-width="1"/>
+<polyline fill="none" points="247.47,135.1 407.47,338.37" stroke="#000000" stroke-dasharray="4 3" stroke-width="1"/>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="10" text-anchor="end" x="89.47" y="341.87">0x0000 0000</text>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="10" text-anchor="end" x="89.47" y="284.25">0x0000 0024</text>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="10" text-anchor="end" x="89.47" y="295.25">0x0000 0023</text>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="10" text-anchor="end" x="89.47" y="242.43">0x0000 0040</text>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="10" text-anchor="end" x="89.47" y="253.43">0x0000 003F</text>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="10" text-anchor="end" x="89.47" y="190.32">0x0000 0180</text>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="10" text-anchor="end" x="89.47" y="201.32">0x0000 017F</text>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="10" text-anchor="end" x="89.47" y="133.1">0x0000 1000</text>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="10" text-anchor="end" x="89.47" y="144.1">0x0000 0FFF</text>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="10" text-anchor="end" x="89.47" y="80.7">0x0000 1FFF</text>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="11" font-weight="bold" text-anchor="middle" x="172.47" y="71.2">Address window</text>
+<rect fill="#ffffff" height="10" width="61.82" x="339.65" y="339.87"/>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="10" text-anchor="end" x="399.47" y="348.37">0x0000 1000</text>
+<rect fill="#ffffff" height="10" width="61.82" x="339.65" y="295.47"/>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="10" text-anchor="end" x="399.47" y="303.97">0x0000 1040</text>
+<rect fill="#ffffff" height="10" width="62.37" x="339.1" y="306.47"/>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="10" text-anchor="end" x="399.47" y="314.97">0x0000 103F</text>
+<rect fill="#ffffff" height="10" width="61.82" x="339.65" y="263.07"/>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="10" text-anchor="end" x="399.47" y="271.57">0x0000 1080</text>
+<rect fill="#ffffff" height="10" width="62.37" x="339.1" y="274.07"/>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="10" text-anchor="end" x="399.47" y="282.57">0x0000 107F</text>
+<rect fill="#ffffff" height="10" width="61.82" x="339.65" y="230.67"/>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="10" text-anchor="end" x="399.47" y="239.17">0x0000 1088</text>
+<rect fill="#ffffff" height="10" width="61.82" x="339.65" y="241.67"/>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="10" text-anchor="end" x="399.47" y="250.17">0x0000 1087</text>
+<rect fill="#ffffff" height="10" width="63.48" x="337.99" y="198.27"/>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="10" text-anchor="end" x="399.47" y="206.77">0x0000 10C8</text>
+<rect fill="#ffffff" height="10" width="63.48" x="337.99" y="209.27"/>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="10" text-anchor="end" x="399.47" y="217.77">0x0000 10C7</text>
+<rect fill="#ffffff" height="10" width="61.82" x="339.65" y="165.87"/>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="10" text-anchor="end" x="399.47" y="174.37">0x0000 1108</text>
+<rect fill="#ffffff" height="10" width="61.82" x="339.65" y="176.87"/>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="10" text-anchor="end" x="399.47" y="185.37">0x0000 1107</text>
+<rect fill="#ffffff" height="10" width="61.82" x="339.65" y="133.47"/>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="10" text-anchor="end" x="399.47" y="141.97">0x0000 1308</text>
+<rect fill="#ffffff" height="10" width="61.82" x="339.65" y="144.47"/>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="10" text-anchor="end" x="399.47" y="152.97">0x0000 1307</text>
+<rect fill="#ffffff" height="10" width="61.82" x="339.65" y="101.07"/>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="10" text-anchor="end" x="399.47" y="109.57">0x0000 1508</text>
+<rect fill="#ffffff" height="10" width="61.82" x="339.65" y="112.07"/>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="10" text-anchor="end" x="399.47" y="120.57">0x0000 1507</text>
+<rect fill="#ffffff" height="10" width="63.47" x="338" y="65.7"/>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="10" text-anchor="end" x="399.47" y="74.2">0x0000 1FFF</text>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="11" font-weight="bold" text-anchor="middle" x="467.47" y="71.2">usb_ram buffers</text>
+<rect fill="#8fa9c9" height="52.11" stroke="#000000" stroke-width="1" width="150" x="97.47" y="286.25"/>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle" x="172.47" y="309.56">Global registers</text>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle" x="172.47" y="322.76">36 B</text>
+<rect fill="#d9d9d9" height="41.82" stroke="#000000" stroke-width="1" width="150" x="97.47" y="244.43"/>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle" x="172.47" y="269.19">Reserved</text>
+<rect fill="#a3b9d4" height="52.11" stroke="#000000" stroke-width="1" width="150" x="97.47" y="192.32"/>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle" x="172.47" y="215.63">endpoint[0..15]</text>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle" x="172.47" y="228.83">320 B</text>
+<rect fill="#d9d9d9" height="57.22" stroke="#000000" stroke-width="1" width="150" x="97.47" y="135.1"/>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle" x="172.47" y="167.56">Reserved</text>
+<rect fill="#81b29a" height="57.9" stroke="#000000" stroke-width="1" width="150" x="97.47" y="77.2"/>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle" x="172.47" y="103.4">usb_ram</text>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle" x="172.47" y="116.6">4 KB</text>
+<rect fill="#8fa9c9" height="32.4" stroke="#000000" stroke-width="1" width="120" x="407.47" y="305.97"/>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle" x="467.47" y="319.42">E0 EP0 OUT</text>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle" x="467.47" y="332.62">64 B</text>
+<rect fill="#8fa9c9" height="32.4" stroke="#000000" stroke-width="1" width="120" x="407.47" y="273.57"/>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle" x="467.47" y="287.02">E1 EP0 IN</text>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle" x="467.47" y="300.22">64 B</text>
+<rect fill="#d8c38f" height="32.4" stroke="#000000" stroke-width="1" width="120" x="407.47" y="241.17"/>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle" x="467.47" y="254.62">E2 EP1 IN notify</text>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle" x="467.47" y="267.82">8 B</text>
+<rect fill="#81b29a" height="32.4" stroke="#000000" stroke-width="1" width="120" x="407.47" y="208.77"/>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle" x="467.47" y="222.22">E3 EP2 OUT (1st)</text>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle" x="467.47" y="235.42">64 B</text>
+<rect fill="#b5dcc4" height="32.4" stroke="#000000" stroke-width="1" width="120" x="407.47" y="176.37"/>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle" x="467.47" y="189.82">E4 EP2 OUT (2nd)</text>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle" x="467.47" y="203.02">64 B</text>
+<rect fill="#e07a5f" height="32.4" stroke="#000000" stroke-width="1" width="120" x="407.47" y="143.97"/>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle" x="467.47" y="157.42">E5 EP2 IN (1st)</text>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle" x="467.47" y="170.62">512 B</text>
+<rect fill="#f2b19f" height="32.4" stroke="#000000" stroke-width="1" width="120" x="407.47" y="111.57"/>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle" x="467.47" y="125.02">E6 EP2 IN (2nd)</text>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle" x="467.47" y="138.22">512 B</text>
+<rect fill="#d9d9d9" height="34.37" stroke="#000000" stroke-width="1" width="120" x="407.47" y="77.2"/>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle" x="467.47" y="98.23">Free</text>
+<text fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="8.8" text-anchor="end" x="537.47" y="389.95">offsets from the core's base address; RAM_ADDR_WIDTH = 12</text>
+</svg>

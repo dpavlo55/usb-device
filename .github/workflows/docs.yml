@@ -1,0 +1,58 @@
+name: Documentation
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Data sheet and software reference
+    runs-on: ubuntu-24.04
+    # Official image: asciidoctor, asciidoctor-pdf and asciidoctor-mathematical preinstalled.
+    container: asciidoctor/docker-asciidoctor:latest
+    steps:
+      # GNU tar: upload-pages-artifact needs options BusyBox tar lacks.
+      - name: Tools
+        run: apk add --no-cache make git doxygen graphviz tar
+
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Build HTML, Doxygen and PDF
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          pages="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
+          make -C docs html doxygen
+          make -C docs pdf DOXYGEN_URL="$pages/sw"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: datasheet-pdf
+          path: docs/public/pdf/usb_device_datasheet.pdf
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/public
+
+  deploy:
+    name: Publish to GitHub Pages
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,47 @@
+name: Set up the simulation toolchain
+description: Python + requirements, NVC and (optionally) the xPack RISC-V GCC for firmware tests
+
+inputs:
+  riscv:
+    description: Also install riscv-none-elf-gcc for the firmware tests
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v6
+      with:
+        python-version: "3.12"
+        cache: pip
+
+    - name: Python packages
+      shell: bash
+      run: pip install -r requirements.txt
+
+    - name: NVC
+      uses: nickg/setup-nvc@v1
+      with:
+        version: "1.23.0"
+
+    - name: Cache RISC-V GCC
+      if: inputs.riscv == 'true'
+      id: riscv-cache
+      uses: actions/cache@v4
+      with:
+        path: ~/xpack-riscv
+        key: xpack-riscv-none-elf-gcc-${{ env.XPACK_RISCV_VERSION }}
+
+    - name: Download RISC-V GCC
+      if: inputs.riscv == 'true' && steps.riscv-cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        v="$XPACK_RISCV_VERSION"
+        url="https://github.com/xpack-dev-tools/riscv-none-elf-gcc-xpack/releases/download/v$v/xpack-riscv-none-elf-gcc-$v-linux-x64.tar.gz"
+        mkdir -p ~/xpack-riscv
+        curl -fsSL "$url" | tar -xz -C ~/xpack-riscv --strip-components=1
+
+    - name: Put RISC-V GCC on PATH
+      if: inputs.riscv == 'true'
+      shell: bash
+      run: |
+        echo "$HOME/xpack-riscv/bin" >> "$GITHUB_PATH"
